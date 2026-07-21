@@ -3,7 +3,7 @@
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -30,6 +30,19 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
     echo=False,
 )
+
+@event.listens_for(engine, "connect")
+def enable_sqlite_foreign_keys(
+    dbapi_connection,
+    connection_record,
+) -> None:
+    """SQLite 외래키 검사를 활성화합니다."""
+
+    del connection_record
+
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON")
+    cursor.close()
 
 
 # API 요청마다 사용할 DB 세션 생성기
