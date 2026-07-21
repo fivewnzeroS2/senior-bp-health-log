@@ -1,0 +1,37 @@
+# Python 임시 파일
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Python 가상환경
+.venv/
+venv/
+env/
+
+# 환경변수와 비밀정보
+.env
+.env.*
+
+# SQLite 실제 데이터
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# data 폴더 유지용 파일은 포함
+!data/.gitkeep
+
+# 테스트 및 캐시
+.pytest_cache/
+.coverage
+htmlcov/
+
+# macOS
+.DS_Store
+
+# VS Code 개인 설정
+.vscode/
+
+# 로그
+*.log
+
+health_log.db

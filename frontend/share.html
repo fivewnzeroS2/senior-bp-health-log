@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>공유 혈압 리포트</title>
+
+  <link rel="stylesheet" href="./css/common.css">
+  <link rel="stylesheet" href="./css/share.css">
+</head>
+
+<body>
+  <header>
+    <!-- 이름과 호칭을 API에서 받아 표시 -->
+    <h1 data-view="shared-profile-name">
+      어르신 혈압 리포트
+    </h1>
+
+    <p data-view="shared-report-type">
+      읽기 전용 공유 화면
+    </p>
+  </header>
+
+  <main>
+    <!-- 공유 범위 정보 -->
+    <section aria-labelledby="share-info-title">
+      <h2 id="share-info-title">공유 정보</h2>
+
+      <div data-view="share-info">
+        <p>조회 기간과 만료일을 불러오는 영역입니다.</p>
+      </div>
+    </section>
+
+    <!-- 최근 측정 결과 -->
+    <section aria-labelledby="shared-latest-title">
+      <h2 id="shared-latest-title">최근 측정 혈압</h2>
+
+      <div data-view="shared-latest-record">
+        <p>최근 혈압 기록을 불러오는 영역입니다.</p>
+      </div>
+    </section>
+
+    <!-- 기간 요약 -->
+    <section aria-labelledby="shared-summary-title">
+      <h2 id="shared-summary-title">기간 요약</h2>
+
+      <div data-view="shared-summary">
+        <p>평균·최고·최저 혈압을 불러오는 영역입니다.</p>
+      </div>
+    </section>
+
+    <!-- 이전 기간 비교 -->
+    <section aria-labelledby="shared-comparison-title">
+      <h2 id="shared-comparison-title">이전 기간과 비교</h2>
+
+      <div data-view="shared-comparison">
+        <p>이전 기간과의 변화량을 불러오는 영역입니다.</p>
+      </div>
+    </section>
+
+    <!-- 혈압 변화 -->
+    <section aria-labelledby="shared-trend-title">
+      <h2 id="shared-trend-title">혈압 변화</h2>
+
+      <div data-view="shared-trend">
+        <p>날짜별 혈압 변화가 표시될 영역입니다.</p>
+      </div>
+    </section>
+
+    <!-- 날짜별 기록 -->
+    <section aria-labelledby="shared-record-list-title">
+      <h2 id="shared-record-list-title">날짜별 혈압 기록</h2>
+
+      <div data-view="shared-record-list">
+        <p>공유된 혈압 기록을 불러오는 영역입니다.</p>
+      </div>
+    </section>
+
+    <!-- 공유 오류·만료 안내 -->
+    <section
+      data-view="share-error"
+      hidden
+      aria-labelledby="share-error-title"
+    >
+      <h2 id="share-error-title">공유 링크 안내</h2>
+
+      <p data-view="share-error-message"></p>
+    </section>
+
+    <!-- 인쇄 -->
+    <section>
+      <button
+        type="button"
+        data-action="print-report"
+      >
+        혈압 리포트 인쇄
+      </button>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      이 리포트는 사용자가 직접 입력한 건강 기록을 정리한 참고 자료입니다.
+      의료 진단이나 의료기관의 검사 결과를 대신하지 않습니다.
+    </p>
+  </footer>
+
+  <!-- 공유 화면 JavaScript -->
+  <script
+    type="module"
+    src="./js/share.js"
+  ></script>
+</body>
+</html>

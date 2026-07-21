@@ -1,0 +1,30 @@
+/* 공유 화면 전용 임시 스타일 */
+
+[data-view="shared-profile-name"] {
+  margin-bottom: 8px;
+}
+
+[data-view="shared-summary"],
+[data-view="shared-comparison"],
+[data-view="shared-record-list"] {
+  margin-top: 16px;
+}
+
+[data-view="share-error"] {
+  border-color: #cc0000;
+}
+
+@media print {
+  button {
+    display: none;
+  }
+
+  body {
+    padding: 0;
+  }
+
+  section {
+    border: none;
+    break-inside: avoid;
+  }
+}
