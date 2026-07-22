@@ -1,3 +1,5 @@
+import json
+
 """어르신 혈압 헬스 로그 FastAPI 애플리케이션."""
 
 from contextlib import asynccontextmanager
@@ -21,6 +23,7 @@ from backend.database import (
 )
 from backend.models import (
     BloodPressureRecord,
+    BloodPressureRecordHistory,
     ElderProfile,
     utc_now,
 )
@@ -36,6 +39,10 @@ from backend.schemas import (
     BloodPressureRecordListResponse,
     BloodPressureRecordUpdate,
     BloodPressureRecordUpdateResponse,
+    BloodPressureRecordChangeItem,
+    BloodPressureRecordHistoryData,
+    BloodPressureRecordHistoryItem,
+    BloodPressureRecordHistoryResponse,
     KST,
 )
 from backend.services import get_measurement_period_label
@@ -94,6 +101,62 @@ def to_sqlite_datetime(value: datetime) -> datetime:
     return value.astimezone(KST).replace(tzinfo=None)
 
 
+RECORD_FIELD_LABELS = {
+    "measured_at": "측정 시각",
+    "systolic": "수축기 혈압",
+    "diastolic": "이완기 혈압",
+    "pulse": "맥박",
+    "measurement_period": "측정 시간대",
+    "memo": "메모",
+}
+
+
+def record_snapshot(
+    record: BloodPressureRecord,
+) -> dict:
+    """현재 혈압 기록을 비교 가능한 값으로 변환합니다."""
+
+    return {
+        "measured_at": (
+            record.measured_at.isoformat()
+            if record.measured_at is not None
+            else None
+        ),
+        "systolic": record.systolic,
+        "diastolic": record.diastolic,
+        "pulse": record.pulse,
+        "measurement_period": record.measurement_period,
+        "memo": record.memo,
+    }
+
+
+def build_record_changes(
+    before: dict,
+    after: dict,
+) -> list[dict]:
+    """수정 전후 값이 다른 항목만 반환합니다."""
+
+    changes = []
+
+    for field, label in RECORD_FIELD_LABELS.items():
+        before_value = before.get(field)
+        after_value = after.get(field)
+
+        if before_value == after_value:
+            continue
+
+        changes.append(
+            {
+                "field": field,
+                "label": label,
+                "before": before_value,
+                "after": after_value,
+            }
+        )
+
+    return changes
+
+
 def record_to_response_data(
     record: BloodPressureRecord,
 ) -> BloodPressureRecordData:
@@ -116,8 +179,10 @@ def record_to_response_data(
         memo=record.memo,
         created_at=record.created_at,
         updated_at=record.updated_at,
+        deleted_at=record.deleted_at,
         revision_count=record.revision_count,
         is_modified=record.revision_count > 0,
+        is_deleted=record.deleted_at is not None,
     )
 
 
@@ -364,7 +429,8 @@ def list_blood_pressure_records(
         effective_days = 7
 
     conditions = [
-        BloodPressureRecord.elder_id == 1
+        BloodPressureRecord.elder_id == 1,
+        BloodPressureRecord.deleted_at.is_(None),
     ]
 
     filter_start_date: date | None = None
@@ -491,7 +557,11 @@ def get_blood_pressure_record(
         record_id,
     )
 
-    if record is None or record.elder_id != 1:
+    if (
+        record is None
+        or record.elder_id != 1
+        or record.deleted_at is not None
+    ):
         return record_not_found_response(record_id)
 
     return BloodPressureRecordDetailResponse(
@@ -518,7 +588,11 @@ def update_blood_pressure_record(
         record_id,
     )
 
-    if record is None or record.elder_id != 1:
+    if (
+        record is None
+        or record.elder_id != 1
+        or record.deleted_at is not None
+    ):
         return record_not_found_response(record_id)
 
     measurement_period = (
@@ -536,19 +610,23 @@ def update_blood_pressure_record(
     )
 
     # 실제로 값이 변경되었는지 확인합니다.
-    has_changes = any(
-        [
-            current_measured_at != new_measured_at,
-            record.systolic != payload.systolic,
-            record.diastolic != payload.diastolic,
-            record.pulse != payload.pulse,
-            record.measurement_period != measurement_period,
-            record.memo != payload.memo,
-        ]
+    before_snapshot = record_snapshot(record)
+
+    after_snapshot = {
+        "measured_at": new_measured_at.isoformat(),
+        "systolic": payload.systolic,
+        "diastolic": payload.diastolic,
+        "pulse": payload.pulse,
+        "measurement_period": measurement_period,
+        "memo": payload.memo,
+    }
+
+    changes = build_record_changes(
+        before_snapshot,
+        after_snapshot,
     )
 
-    # 같은 값을 다시 보냈다면 수정 횟수를 증가시키지 않습니다.
-    if not has_changes:
+    if not changes:
         return BloodPressureRecordUpdateResponse(
             message="변경된 내용이 없어 기존 기록을 반환했습니다.",
             data=record_to_response_data(record),
@@ -561,9 +639,22 @@ def update_blood_pressure_record(
     record.measurement_period = measurement_period
     record.memo = payload.memo
 
-    # 수정 관련 정보는 서버에서 자동 처리합니다.
+
     record.updated_at = utc_now()
     record.revision_count += 1
+
+    history = BloodPressureRecordHistory(
+        record_id=record.id,
+        action_type="update",
+        revision_number=record.revision_count,
+        changes_json=json.dumps(
+            changes,
+            ensure_ascii=False,
+        ),
+        created_at=record.updated_at,
+    )
+
+    db.add(history)
 
     try:
         db.commit()
@@ -602,7 +693,7 @@ def delete_blood_pressure_record(
     record_id: int,
     db: Session = Depends(get_db),
 ) -> BloodPressureRecordDeleteResponse | JSONResponse:
-    """기록 번호에 해당하는 혈압 기록을 삭제합니다."""
+    """혈압 기록을 소프트 삭제하고 삭제 시각을 남깁니다."""
 
     record = db.get(
         BloodPressureRecord,
@@ -612,11 +703,57 @@ def delete_blood_pressure_record(
     if record is None or record.elder_id != 1:
         return record_not_found_response(record_id)
 
-    deleted_id = record.id
+    if record.deleted_at is not None:
+        return JSONResponse(
+            status_code=status.HTTP_410_GONE,
+            content={
+                "success": False,
+                "message": "이미 삭제된 혈압 기록입니다.",
+                "data": None,
+                "meta": None,
+                "error": {
+                    "code": "RECORD_ALREADY_DELETED",
+                    "details": [
+                        {
+                            "field": "record_id",
+                            "reason": (
+                                f"{record_id}번 기록은 "
+                                "이미 삭제되었습니다."
+                            ),
+                        }
+                    ],
+                },
+            },
+        )
+
+    deleted_at = utc_now()
+    record.deleted_at = deleted_at
+
+    delete_changes = [
+        {
+            "field": "deleted_at",
+            "label": "삭제 시각",
+            "before": None,
+            "after": deleted_at.isoformat(),
+        }
+    ]
+
+    history = BloodPressureRecordHistory(
+        record_id=record.id,
+        action_type="delete",
+        revision_number=None,
+        changes_json=json.dumps(
+            delete_changes,
+            ensure_ascii=False,
+        ),
+        created_at=deleted_at,
+    )
+
+    db.add(history)
 
     try:
-        db.delete(record)
         db.commit()
+        db.refresh(record)
 
     except SQLAlchemyError:
         db.rollback()
@@ -636,9 +773,11 @@ def delete_blood_pressure_record(
         )
 
     return BloodPressureRecordDeleteResponse(
-        message="혈압 기록이 삭제되었습니다.",
+        message="혈압 기록이 삭제 처리되었습니다.",
         data=BloodPressureRecordDeleteData(
-            deleted_id=deleted_id,
+            deleted_id=record.id,
+            deleted_at=record.deleted_at,
+            is_deleted=True,
         ),
     )
 
@@ -698,7 +837,80 @@ def record_not_found_response(
         },
     )
 
-    return BloodPressureRecordCreateResponse(
-        message="혈압 기록이 저장되었습니다.",
-        data=response_data,
+
+
+@app.get(
+    "/api/v1/records/{record_id}/history",
+    response_model=BloodPressureRecordHistoryResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["혈압 기록"],
+)
+def get_blood_pressure_record_history(
+    record_id: int,
+    db: Session = Depends(get_db),
+) -> BloodPressureRecordHistoryResponse | JSONResponse:
+    """혈압 기록의 수정 및 삭제 이력을 조회합니다."""
+
+    record = db.get(
+        BloodPressureRecord,
+        record_id,
+    )
+
+    if record is None or record.elder_id != 1:
+        return record_not_found_response(record_id)
+
+    statement = (
+        select(BloodPressureRecordHistory)
+        .where(
+            BloodPressureRecordHistory.record_id
+            == record_id
+        )
+        .order_by(
+            BloodPressureRecordHistory.created_at.desc(),
+            BloodPressureRecordHistory.id.desc(),
+        )
+    )
+
+    history_entries = db.scalars(statement).all()
+
+    items = []
+
+    for history in history_entries:
+        changes_data = json.loads(
+            history.changes_json
+        )
+
+        items.append(
+            BloodPressureRecordHistoryItem(
+                id=history.id,
+                action_type=history.action_type,
+                action_type_label=(
+                    "수정"
+                    if history.action_type == "update"
+                    else "삭제"
+                ),
+                revision_number=history.revision_number,
+                changed_at=history.created_at,
+                changes=[
+                    BloodPressureRecordChangeItem(
+                        field=change["field"],
+                        label=change["label"],
+                        before=change.get("before"),
+                        after=change.get("after"),
+                    )
+                    for change in changes_data
+                ],
+            )
+        )
+
+    return BloodPressureRecordHistoryResponse(
+        message="혈압 기록 변경 이력을 조회했습니다.",
+        data=BloodPressureRecordHistoryData(
+            record_id=record.id,
+            revision_count=record.revision_count,
+            updated_at=record.updated_at,
+            deleted_at=record.deleted_at,
+            is_deleted=record.deleted_at is not None,
+            items=items,
+        ),
     )

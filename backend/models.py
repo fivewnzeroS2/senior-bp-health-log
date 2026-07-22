@@ -140,6 +140,11 @@ class BloodPressureRecord(Base):
         nullable=True,
     )
 
+    deleted_at: Mapped[datetime | None] = mapped_column(
+    DateTime(timezone=True),
+    nullable=True,
+    )
+
     revision_count: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -148,6 +153,13 @@ class BloodPressureRecord(Base):
 
     elder: Mapped[ElderProfile] = relationship(
         back_populates="blood_pressure_records",
+    )
+
+    history_entries: Mapped[
+        list["BloodPressureRecordHistory"]
+    ] = relationship(
+        back_populates="record",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
@@ -184,6 +196,63 @@ class BloodPressureRecord(Base):
             "idx_bp_records_elder_measured_at",
             "elder_id",
             "measured_at",
+        ),
+    )
+
+
+class BloodPressureRecordHistory(Base):
+    """혈압 기록의 수정 및 삭제 이력."""
+
+    __tablename__ = "blood_pressure_record_history"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    record_id: Mapped[int] = mapped_column(
+        ForeignKey(
+            "blood_pressure_records.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+    )
+
+    action_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+    )
+
+    revision_number: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    changes_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+    )
+
+    record: Mapped["BloodPressureRecord"] = relationship(
+        back_populates="history_entries",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "action_type IN ('update', 'delete')",
+            name="ck_bp_history_action_type",
+        ),
+        Index(
+            "idx_bp_history_record_created_at",
+            "record_id",
+            "created_at",
         ),
     )
 

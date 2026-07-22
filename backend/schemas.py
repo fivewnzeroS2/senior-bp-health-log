@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -120,8 +120,10 @@ class BloodPressureRecordData(BaseModel):
     memo: str | None
     created_at: datetime
     updated_at: datetime | None
+    deleted_at: datetime | None
     revision_count: int
     is_modified: bool
+    is_deleted: bool
 
 
 class BloodPressureRecordCreateResponse(BaseModel):
@@ -189,9 +191,11 @@ class BloodPressureRecordUpdateResponse(BaseModel):
 
 
 class BloodPressureRecordDeleteData(BaseModel):
-    """삭제된 혈압 기록 정보."""
+    """삭제 처리된 혈압 기록 정보."""
 
     deleted_id: int
+    deleted_at: datetime
+    is_deleted: bool = True
 
 
 class BloodPressureRecordDeleteResponse(BaseModel):
@@ -200,5 +204,46 @@ class BloodPressureRecordDeleteResponse(BaseModel):
     success: Literal[True] = True
     message: str
     data: BloodPressureRecordDeleteData
+    meta: None = None
+    error: None = None
+
+
+class BloodPressureRecordChangeItem(BaseModel):
+    """수정 전후 값 하나."""
+
+    field: str
+    label: str
+    before: Any
+    after: Any
+
+
+class BloodPressureRecordHistoryItem(BaseModel):
+    """수정 또는 삭제 이력 하나."""
+
+    id: int
+    action_type: Literal["update", "delete"]
+    action_type_label: str
+    revision_number: int | None
+    changed_at: datetime
+    changes: list[BloodPressureRecordChangeItem]
+
+
+class BloodPressureRecordHistoryData(BaseModel):
+    """혈압 기록의 전체 변경 이력."""
+
+    record_id: int
+    revision_count: int
+    updated_at: datetime | None
+    deleted_at: datetime | None
+    is_deleted: bool
+    items: list[BloodPressureRecordHistoryItem]
+
+
+class BloodPressureRecordHistoryResponse(BaseModel):
+    """혈압 기록 변경 이력 조회 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: BloodPressureRecordHistoryData
     meta: None = None
     error: None = None
