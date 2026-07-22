@@ -132,3 +132,29 @@ class BloodPressureRecordCreateResponse(BaseModel):
     data: BloodPressureRecordData
     meta: None = None
     error: None = None
+
+
+class BloodPressureRecordListData(BaseModel):
+    """혈압 기록 목록 데이터."""
+
+    items: list[BloodPressureRecordData]
+
+
+class BloodPressureRecordListMeta(BaseModel):
+    """혈압 기록 목록의 검색 및 페이지 정보."""
+
+    total: int
+    count: int
+    limit: int
+    offset: int
+    filters: dict[str, int | str | None]
+
+
+class BloodPressureRecordListResponse(BaseModel):
+    """혈압 기록 목록 조회 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: BloodPressureRecordListData
+    meta: BloodPressureRecordListMeta
+    error: None = None
