@@ -186,3 +186,19 @@ class BloodPressureRecordUpdateResponse(BaseModel):
     data: BloodPressureRecordData
     meta: None = None
     error: None = None
+
+
+class BloodPressureRecordDeleteData(BaseModel):
+    """삭제된 혈압 기록 정보."""
+
+    deleted_id: int
+
+
+class BloodPressureRecordDeleteResponse(BaseModel):
+    """혈압 기록 삭제 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: BloodPressureRecordDeleteData
+    meta: None = None
+    error: None = None

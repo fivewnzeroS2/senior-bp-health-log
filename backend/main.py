@@ -28,6 +28,8 @@ from backend.schemas import (
     BloodPressureRecordCreate,
     BloodPressureRecordCreateResponse,
     BloodPressureRecordData,
+    BloodPressureRecordDeleteData,
+    BloodPressureRecordDeleteResponse,
     BloodPressureRecordDetailResponse,
     BloodPressureRecordListData,
     BloodPressureRecordListMeta,
@@ -222,6 +224,57 @@ def shared_report_page(
     status_code=status.HTTP_201_CREATED,
     tags=["혈압 기록"],
 )
+def create_blood_pressure_record(
+    payload: BloodPressureRecordCreate,
+    db: Session = Depends(get_db),
+) -> BloodPressureRecordCreateResponse | JSONResponse:
+    """새로운 혈압 기록을 SQLite에 저장합니다."""
+
+    measurement_period = (
+        payload.measurement_period.value
+        if payload.measurement_period is not None
+        else None
+    )
+
+    record = BloodPressureRecord(
+        elder_id=1,
+        measured_at=to_sqlite_datetime(payload.measured_at),
+        systolic=payload.systolic,
+        diastolic=payload.diastolic,
+        pulse=payload.pulse,
+        measurement_period=measurement_period,
+        memo=payload.memo,
+        revision_count=0,
+    )
+
+    try:
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+
+    except SQLAlchemyError:
+        db.rollback()
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "message": "혈압 기록을 저장하지 못했습니다.",
+                "data": None,
+                "meta": None,
+                "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "details": [],
+                },
+            },
+        )
+
+    response_data = record_to_response_data(record)
+    return BloodPressureRecordCreateResponse(
+        success=True,
+        message="혈압 기록이 성공적으로 저장되었습니다.",
+        data=response_data,
+    )
 
 
 @app.get(
@@ -539,33 +592,31 @@ def update_blood_pressure_record(
     )
 
 
-def create_blood_pressure_record(
-    payload: BloodPressureRecordCreate,
+@app.delete(
+    "/api/v1/records/{record_id}",
+    response_model=BloodPressureRecordDeleteResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["혈압 기록"],
+)
+def delete_blood_pressure_record(
+    record_id: int,
     db: Session = Depends(get_db),
-) -> BloodPressureRecordCreateResponse | JSONResponse:
-    """새로운 혈압 기록을 SQLite에 저장합니다."""
+) -> BloodPressureRecordDeleteResponse | JSONResponse:
+    """기록 번호에 해당하는 혈압 기록을 삭제합니다."""
 
-    measurement_period = (
-        payload.measurement_period.value
-        if payload.measurement_period is not None
-        else None
+    record = db.get(
+        BloodPressureRecord,
+        record_id,
     )
 
-    record = BloodPressureRecord(
-        elder_id=1,
-        measured_at=to_sqlite_datetime(payload.measured_at),
-        systolic=payload.systolic,
-        diastolic=payload.diastolic,
-        pulse=payload.pulse,
-        measurement_period=measurement_period,
-        memo=payload.memo,
-        revision_count=0,
-    )
+    if record is None or record.elder_id != 1:
+        return record_not_found_response(record_id)
+
+    deleted_id = record.id
 
     try:
-        db.add(record)
+        db.delete(record)
         db.commit()
-        db.refresh(record)
 
     except SQLAlchemyError:
         db.rollback()
@@ -574,7 +625,7 @@ def create_blood_pressure_record(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "success": False,
-                "message": "혈압 기록을 저장하지 못했습니다.",
+                "message": "혈압 기록을 삭제하지 못했습니다.",
                 "data": None,
                 "meta": None,
                 "error": {
@@ -584,7 +635,15 @@ def create_blood_pressure_record(
             },
         )
 
-    response_data = record_to_response_data(record)
+    return BloodPressureRecordDeleteResponse(
+        message="혈압 기록이 삭제되었습니다.",
+        data=BloodPressureRecordDeleteData(
+            deleted_id=deleted_id,
+        ),
+    )
+
+
+
 
 
 def invalid_date_filter_response(
