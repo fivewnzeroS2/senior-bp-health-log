@@ -27,6 +27,7 @@ from backend.schemas import (
     BloodPressureRecordCreate,
     BloodPressureRecordCreateResponse,
     BloodPressureRecordData,
+    BloodPressureRecordDetailResponse,
     BloodPressureRecordListData,
     BloodPressureRecordListMeta,
     BloodPressureRecordListResponse,
@@ -405,6 +406,31 @@ def list_blood_pressure_records(
     )
 
 
+@app.get(
+    "/api/v1/records/{record_id}",
+    response_model=BloodPressureRecordDetailResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["혈압 기록"],
+)
+def get_blood_pressure_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+) -> BloodPressureRecordDetailResponse | JSONResponse:
+    """기록 번호로 혈압 기록 하나를 조회합니다."""
+
+    record = db.get(
+        BloodPressureRecord,
+        record_id,
+    )
+
+    if record is None or record.elder_id != 1:
+        return record_not_found_response(record_id)
+
+    return BloodPressureRecordDetailResponse(
+        message="혈압 기록을 조회했습니다.",
+        data=record_to_response_data(record),
+    )
+
 
 def create_blood_pressure_record(
     payload: BloodPressureRecordCreate,
@@ -478,6 +504,33 @@ def invalid_date_filter_response(
         },
     )
 
+
+def record_not_found_response(
+    record_id: int,
+) -> JSONResponse:
+    """존재하지 않는 혈압 기록 응답을 반환합니다."""
+
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "success": False,
+            "message": "해당 혈압 기록을 찾을 수 없습니다.",
+            "data": None,
+            "meta": None,
+            "error": {
+                "code": "RECORD_NOT_FOUND",
+                "details": [
+                    {
+                        "field": "record_id",
+                        "reason": (
+                            f"{record_id}번 혈압 기록이 "
+                            "존재하지 않습니다."
+                        ),
+                    }
+                ],
+            },
+        },
+    )
 
     return BloodPressureRecordCreateResponse(
         message="혈압 기록이 저장되었습니다.",

@@ -158,3 +158,13 @@ class BloodPressureRecordListResponse(BaseModel):
     data: BloodPressureRecordListData
     meta: BloodPressureRecordListMeta
     error: None = None
+
+
+class BloodPressureRecordDetailResponse(BaseModel):
+    """혈압 기록 하나 조회 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: BloodPressureRecordData
+    meta: None = None
+    error: None = None
