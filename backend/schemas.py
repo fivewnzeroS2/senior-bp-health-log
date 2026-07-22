@@ -168,3 +168,21 @@ class BloodPressureRecordDetailResponse(BaseModel):
     data: BloodPressureRecordData
     meta: None = None
     error: None = None
+
+
+class BloodPressureRecordUpdate(BloodPressureRecordCreate):
+    """
+    혈압 기록 수정 요청.
+
+    PUT 방식이므로 등록 요청과 동일한 전체 항목을 받습니다.
+    """
+
+
+class BloodPressureRecordUpdateResponse(BaseModel):
+    """혈압 기록 수정 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: BloodPressureRecordData
+    meta: None = None
+    error: None = None

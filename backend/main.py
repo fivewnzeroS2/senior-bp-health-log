@@ -22,6 +22,7 @@ from backend.database import (
 from backend.models import (
     BloodPressureRecord,
     ElderProfile,
+    utc_now,
 )
 from backend.schemas import (
     BloodPressureRecordCreate,
@@ -31,6 +32,8 @@ from backend.schemas import (
     BloodPressureRecordListData,
     BloodPressureRecordListMeta,
     BloodPressureRecordListResponse,
+    BloodPressureRecordUpdate,
+    BloodPressureRecordUpdateResponse,
     KST,
 )
 from backend.services import get_measurement_period_label
@@ -75,6 +78,18 @@ async def lifespan(app: FastAPI):
     create_default_elder_profile()
 
     yield
+
+
+def to_sqlite_datetime(value: datetime) -> datetime:
+    """
+    날짜와 시간을 한국 시간 기준으로 맞춘 뒤
+    SQLite 저장용 datetime으로 변환합니다.
+    """
+
+    if value.tzinfo is None:
+        return value
+
+    return value.astimezone(KST).replace(tzinfo=None)
 
 
 def record_to_response_data(
@@ -432,6 +447,98 @@ def get_blood_pressure_record(
     )
 
 
+@app.put(
+    "/api/v1/records/{record_id}",
+    response_model=BloodPressureRecordUpdateResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["혈압 기록"],
+)
+def update_blood_pressure_record(
+    record_id: int,
+    payload: BloodPressureRecordUpdate,
+    db: Session = Depends(get_db),
+) -> BloodPressureRecordUpdateResponse | JSONResponse:
+    """기록 번호에 해당하는 혈압 기록을 수정합니다."""
+
+    record = db.get(
+        BloodPressureRecord,
+        record_id,
+    )
+
+    if record is None or record.elder_id != 1:
+        return record_not_found_response(record_id)
+
+    measurement_period = (
+        payload.measurement_period.value
+        if payload.measurement_period is not None
+        else None
+    )
+
+    new_measured_at = to_sqlite_datetime(
+        payload.measured_at
+    )
+
+    current_measured_at = to_sqlite_datetime(
+        record.measured_at
+    )
+
+    # 실제로 값이 변경되었는지 확인합니다.
+    has_changes = any(
+        [
+            current_measured_at != new_measured_at,
+            record.systolic != payload.systolic,
+            record.diastolic != payload.diastolic,
+            record.pulse != payload.pulse,
+            record.measurement_period != measurement_period,
+            record.memo != payload.memo,
+        ]
+    )
+
+    # 같은 값을 다시 보냈다면 수정 횟수를 증가시키지 않습니다.
+    if not has_changes:
+        return BloodPressureRecordUpdateResponse(
+            message="변경된 내용이 없어 기존 기록을 반환했습니다.",
+            data=record_to_response_data(record),
+        )
+
+    record.measured_at = new_measured_at
+    record.systolic = payload.systolic
+    record.diastolic = payload.diastolic
+    record.pulse = payload.pulse
+    record.measurement_period = measurement_period
+    record.memo = payload.memo
+
+    # 수정 관련 정보는 서버에서 자동 처리합니다.
+    record.updated_at = utc_now()
+    record.revision_count += 1
+
+    try:
+        db.commit()
+        db.refresh(record)
+
+    except SQLAlchemyError:
+        db.rollback()
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "message": "혈압 기록을 수정하지 못했습니다.",
+                "data": None,
+                "meta": None,
+                "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "details": [],
+                },
+            },
+        )
+
+    return BloodPressureRecordUpdateResponse(
+        message="혈압 기록이 수정되었습니다.",
+        data=record_to_response_data(record),
+    )
+
+
 def create_blood_pressure_record(
     payload: BloodPressureRecordCreate,
     db: Session = Depends(get_db),
@@ -446,7 +553,7 @@ def create_blood_pressure_record(
 
     record = BloodPressureRecord(
         elder_id=1,
-        measured_at=payload.measured_at,
+        measured_at=to_sqlite_datetime(payload.measured_at),
         systolic=payload.systolic,
         diastolic=payload.diastolic,
         pulse=payload.pulse,
