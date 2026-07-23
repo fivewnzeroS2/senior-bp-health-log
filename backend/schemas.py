@@ -1,6 +1,6 @@
 """FastAPI 요청 및 응답 데이터 형식."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Literal
 
@@ -245,5 +245,71 @@ class BloodPressureRecordHistoryResponse(BaseModel):
     success: Literal[True] = True
     message: str
     data: BloodPressureRecordHistoryData
+    meta: None = None
+    error: None = None
+
+
+class WeeklyReportPeriod(BaseModel):
+    """리포트 조회 기간."""
+
+    start_date: date
+    end_date: date
+
+
+class WeeklyReportAverage(BaseModel):
+    """기간 내 평균 혈압과 맥박."""
+
+    systolic: float | None
+    diastolic: float | None
+    pulse: float | None
+
+
+class WeeklyReportRecordPoint(BaseModel):
+    """리포트에 표시할 혈압 기록 하나."""
+
+    record_id: int
+    measured_at: datetime
+    systolic: int
+    diastolic: int
+    pulse: int | None
+
+
+class WeeklyReportSummary(BaseModel):
+    """한 기간의 혈압 통계 요약."""
+
+    measurement_count: int
+    average: WeeklyReportAverage
+    highest: WeeklyReportRecordPoint | None
+    lowest: WeeklyReportRecordPoint | None
+
+
+class WeeklyReportComparison(BaseModel):
+    """현재 기간과 이전 기간의 비교 결과."""
+
+    available: bool
+    systolic_change: float | None = None
+    diastolic_change: float | None = None
+    pulse_change: float | None = None
+    measurement_count_change: int | None = None
+    reason: str | None = None
+
+
+class WeeklyReportData(BaseModel):
+    """최근 7일 리포트 전체 데이터."""
+
+    period: WeeklyReportPeriod
+    previous_period: WeeklyReportPeriod
+    summary: WeeklyReportSummary
+    previous_summary: WeeklyReportSummary
+    comparison: WeeklyReportComparison
+    trend: list[WeeklyReportRecordPoint]
+
+
+class WeeklyReportResponse(BaseModel):
+    """최근 7일 리포트 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: WeeklyReportData
     meta: None = None
     error: None = None

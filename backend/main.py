@@ -44,6 +44,13 @@ from backend.schemas import (
     BloodPressureRecordHistoryItem,
     BloodPressureRecordHistoryResponse,
     KST,
+    WeeklyReportAverage,
+    WeeklyReportComparison,
+    WeeklyReportData,
+    WeeklyReportPeriod,
+    WeeklyReportRecordPoint,
+    WeeklyReportResponse,
+    WeeklyReportSummary,
 )
 from backend.services import get_measurement_period_label
 
@@ -155,6 +162,152 @@ def build_record_changes(
         )
 
     return changes
+
+
+def calculate_average(
+    values: list[int | None],
+) -> float | None:
+    """null을 제외하고 평균을 소수점 첫째 자리까지 계산합니다."""
+
+    valid_values = [
+        value
+        for value in values
+        if value is not None
+    ]
+
+    if not valid_values:
+        return None
+
+    return round(
+        sum(valid_values) / len(valid_values),
+        1,
+    )
+
+
+def calculate_difference(
+    current_value: float | None,
+    previous_value: float | None,
+) -> float | None:
+    """현재 평균에서 이전 평균을 뺀 변화량을 반환합니다."""
+
+    if current_value is None or previous_value is None:
+        return None
+
+    return round(
+        current_value - previous_value,
+        1,
+    )
+
+
+def record_to_weekly_report_point(
+    record: BloodPressureRecord,
+) -> WeeklyReportRecordPoint:
+    """DB 혈압 기록을 리포트용 데이터로 변환합니다."""
+
+    return WeeklyReportRecordPoint(
+        record_id=record.id,
+        measured_at=record.measured_at,
+        systolic=record.systolic,
+        diastolic=record.diastolic,
+        pulse=record.pulse,
+    )
+
+
+def get_active_records_between(
+    db: Session,
+    start_date: date,
+    end_date: date,
+) -> list[BloodPressureRecord]:
+    """
+    지정한 날짜 범위의 삭제되지 않은 혈압 기록을 조회합니다.
+    """
+
+    start_datetime = datetime.combine(
+        start_date,
+        time.min,
+    )
+
+    end_datetime_exclusive = datetime.combine(
+        end_date + timedelta(days=1),
+        time.min,
+    )
+
+    statement = (
+        select(BloodPressureRecord)
+        .where(
+            BloodPressureRecord.elder_id == 1,
+            BloodPressureRecord.deleted_at.is_(None),
+            BloodPressureRecord.measured_at
+            >= start_datetime,
+            BloodPressureRecord.measured_at
+            < end_datetime_exclusive,
+        )
+        .order_by(
+            BloodPressureRecord.measured_at.asc(),
+            BloodPressureRecord.id.asc(),
+        )
+    )
+
+    return list(
+        db.scalars(statement).all()
+    )
+
+
+def build_weekly_report_summary(
+    records: list[BloodPressureRecord],
+) -> WeeklyReportSummary:
+    """혈압 기록 목록으로 기간별 통계를 계산합니다."""
+
+    average = WeeklyReportAverage(
+        systolic=calculate_average(
+            [record.systolic for record in records]
+        ),
+        diastolic=calculate_average(
+            [record.diastolic for record in records]
+        ),
+        pulse=calculate_average(
+            [record.pulse for record in records]
+        ),
+    )
+
+    if not records:
+        return WeeklyReportSummary(
+            measurement_count=0,
+            average=average,
+            highest=None,
+            lowest=None,
+        )
+
+    # 이 프로젝트에서는 수축기 혈압을 우선 기준으로
+    # 가장 높은 기록과 가장 낮은 기록을 결정합니다.
+    highest_record = max(
+        records,
+        key=lambda record: (
+            record.systolic,
+            record.diastolic,
+            record.measured_at,
+        ),
+    )
+
+    lowest_record = min(
+        records,
+        key=lambda record: (
+            record.systolic,
+            record.diastolic,
+            record.measured_at,
+        ),
+    )
+
+    return WeeklyReportSummary(
+        measurement_count=len(records),
+        average=average,
+        highest=record_to_weekly_report_point(
+            highest_record
+        ),
+        lowest=record_to_weekly_report_point(
+            lowest_record
+        ),
+    )
 
 
 def record_to_response_data(
@@ -912,5 +1065,133 @@ def get_blood_pressure_record_history(
             deleted_at=record.deleted_at,
             is_deleted=record.deleted_at is not None,
             items=items,
+        ),
+    )
+
+
+@app.get(
+    "/api/v1/reports/weekly",
+    response_model=WeeklyReportResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["리포트"],
+)
+def get_weekly_blood_pressure_report(
+    end_date: date | None = Query(
+        default=None,
+        description=(
+            "리포트 마지막 날짜. "
+            "입력하지 않으면 오늘을 사용합니다."
+        ),
+    ),
+    db: Session = Depends(get_db),
+) -> WeeklyReportResponse:
+    """최근 7일과 이전 7일의 혈압 기록을 비교합니다."""
+
+    report_end_date = (
+        end_date
+        if end_date is not None
+        else datetime.now(KST).date()
+    )
+
+    report_start_date = (
+        report_end_date - timedelta(days=6)
+    )
+
+    previous_end_date = (
+        report_start_date - timedelta(days=1)
+    )
+
+    previous_start_date = (
+        previous_end_date - timedelta(days=6)
+    )
+
+    current_records = get_active_records_between(
+        db=db,
+        start_date=report_start_date,
+        end_date=report_end_date,
+    )
+
+    previous_records = get_active_records_between(
+        db=db,
+        start_date=previous_start_date,
+        end_date=previous_end_date,
+    )
+
+    current_summary = build_weekly_report_summary(
+        current_records
+    )
+
+    previous_summary = build_weekly_report_summary(
+        previous_records
+    )
+
+    if not current_records:
+        comparison = WeeklyReportComparison(
+            available=False,
+            reason=(
+                "현재 7일 기간의 혈압 기록이 없습니다."
+            ),
+        )
+
+    elif not previous_records:
+        comparison = WeeklyReportComparison(
+            available=False,
+            reason=(
+                "이전 7일 기간의 혈압 기록이 없습니다."
+            ),
+        )
+
+    else:
+        comparison = WeeklyReportComparison(
+            available=True,
+            systolic_change=calculate_difference(
+                current_summary.average.systolic,
+                previous_summary.average.systolic,
+            ),
+            diastolic_change=calculate_difference(
+                current_summary.average.diastolic,
+                previous_summary.average.diastolic,
+            ),
+            pulse_change=calculate_difference(
+                current_summary.average.pulse,
+                previous_summary.average.pulse,
+            ),
+            measurement_count_change=(
+                current_summary.measurement_count
+                - previous_summary.measurement_count
+            ),
+            reason=None,
+        )
+
+    trend = [
+        record_to_weekly_report_point(record)
+        for record in current_records
+    ]
+
+    if current_records:
+        message = (
+            "최근 7일 혈압 리포트를 조회했습니다."
+        )
+    else:
+        message = (
+            "최근 7일 혈압 기록이 없어 "
+            "빈 리포트를 반환했습니다."
+        )
+
+    return WeeklyReportResponse(
+        message=message,
+        data=WeeklyReportData(
+            period=WeeklyReportPeriod(
+                start_date=report_start_date,
+                end_date=report_end_date,
+            ),
+            previous_period=WeeklyReportPeriod(
+                start_date=previous_start_date,
+                end_date=previous_end_date,
+            ),
+            summary=current_summary,
+            previous_summary=previous_summary,
+            comparison=comparison,
+            trend=trend,
         ),
     )
