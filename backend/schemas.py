@@ -273,6 +273,28 @@ class WeeklyReportAverage(BaseModel):
     pulse: float | None
 
 
+class WeeklyReportCategoryCounts(BaseModel):
+    """기간 내 혈압 상태별 기록 개수."""
+
+    normal: int = Field(
+        default=0,
+        ge=0,
+        description="정상 상태 기록 개수",
+    )
+
+    caution: int = Field(
+        default=0,
+        ge=0,
+        description="주의 상태 기록 개수",
+    )
+
+    high: int = Field(
+        default=0,
+        ge=0,
+        description="높음 상태 기록 개수",
+    )
+
+
 class WeeklyReportRecordPoint(BaseModel):
     """리포트에 표시할 혈압 기록 하나."""
 
@@ -295,6 +317,9 @@ class WeeklyReportSummary(BaseModel):
     """한 기간의 혈압 통계 요약."""
 
     measurement_count: int
+
+    category_counts: WeeklyReportCategoryCounts
+
     average: WeeklyReportAverage
     highest: WeeklyReportRecordPoint | None
     lowest: WeeklyReportRecordPoint | None

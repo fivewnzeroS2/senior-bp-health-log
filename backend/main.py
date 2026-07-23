@@ -48,6 +48,7 @@ from backend.schemas import (
     ElderProfileUpdate,
     KST,
     WeeklyReportAverage,
+    WeeklyReportCategoryCounts,
     WeeklyReportComparison,
     WeeklyReportData,
     WeeklyReportPeriod,
@@ -340,10 +341,60 @@ def get_active_records_between(
     )
 
 
+def count_blood_pressure_categories(
+    records: list[BloodPressureRecord],
+) -> WeeklyReportCategoryCounts:
+    """혈압 기록을 정상·주의·높음 상태별로 집계합니다."""
+
+    counts = {
+        "normal": 0,
+        "caution": 0,
+        "high": 0,
+    }
+
+    for record in records:
+        category = get_blood_pressure_category(
+            systolic=record.systolic,
+            diastolic=record.diastolic,
+        )
+
+        counts[category] += 1
+
+    return WeeklyReportCategoryCounts(
+        normal=counts["normal"],
+        caution=counts["caution"],
+        high=counts["high"],
+    )
+
+
+def validate_category_count_total(
+    measurement_count: int,
+    category_counts: WeeklyReportCategoryCounts,
+) -> None:
+    """전체 측정 횟수와 상태별 개수 합계를 검사합니다."""
+
+    category_total = (
+        category_counts.normal
+        + category_counts.caution
+        + category_counts.high
+    )
+
+    if category_total != measurement_count:
+        raise ValueError(
+            "상태별 기록 개수의 합계가 "
+            "전체 측정 횟수와 일치하지 않습니다."
+        )
+
+
+
 def build_weekly_report_summary(
     records: list[BloodPressureRecord],
 ) -> WeeklyReportSummary:
     """혈압 기록 목록으로 기간별 통계를 계산합니다."""
+
+    category_counts = count_blood_pressure_categories(
+        records
+    )
 
     average = WeeklyReportAverage(
         systolic=calculate_average(
@@ -360,12 +411,13 @@ def build_weekly_report_summary(
     if not records:
         return WeeklyReportSummary(
             measurement_count=0,
+            category_counts=category_counts,
             average=average,
             highest=None,
             lowest=None,
         )
 
-    # 이 프로젝트에서는 수축기 혈압을 우선 기준으로
+    # 수축기 혈압을 우선 기준으로
     # 가장 높은 기록과 가장 낮은 기록을 결정합니다.
     highest_record = max(
         records,
@@ -387,6 +439,7 @@ def build_weekly_report_summary(
 
     return WeeklyReportSummary(
         measurement_count=len(records),
+        category_counts=category_counts,
         average=average,
         highest=record_to_weekly_report_point(
             highest_record
