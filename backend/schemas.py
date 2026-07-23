@@ -284,13 +284,34 @@ class WeeklyReportSummary(BaseModel):
 
 
 class WeeklyReportComparison(BaseModel):
-    """현재 기간과 이전 기간의 비교 결과."""
+    """현재 7일과 이전 7일의 비교 결과."""
 
     available: bool
+
     systolic_change: float | None = None
+    systolic_direction: (
+        Literal["increase", "decrease", "same"] | None
+    ) = None
+
     diastolic_change: float | None = None
+    diastolic_direction: (
+        Literal["increase", "decrease", "same"] | None
+    ) = None
+
     pulse_change: float | None = None
+    pulse_direction: (
+        Literal["increase", "decrease", "same"] | None
+    ) = None
+
     measurement_count_change: int | None = None
+    measurement_count_direction: (
+        Literal["increase", "decrease", "same"] | None
+    ) = None
+
+    messages: list[str] = Field(
+        default_factory=list,
+    )
+
     reason: str | None = None
 
 
@@ -311,5 +332,87 @@ class WeeklyReportResponse(BaseModel):
     success: Literal[True] = True
     message: str
     data: WeeklyReportData
+    meta: None = None
+    error: None = None
+
+
+class ElderProfileUpdate(BaseModel):
+    """어르신 프로필 등록 및 수정 요청."""
+
+    name: str = Field(
+        min_length=1,
+        max_length=100,
+        description="어르신 이름",
+    )
+
+    honorific: str = Field(
+        default="어르신",
+        min_length=1,
+        max_length=50,
+        description="이름 뒤에 표시할 호칭",
+    )
+
+    birth_year: int | None = Field(
+        default=None,
+        ge=1900,
+        description="출생 연도",
+    )
+
+    @field_validator("name", "honorific")
+    @classmethod
+    def normalize_profile_text(
+        cls,
+        value: str,
+    ) -> str:
+        """이름과 호칭의 앞뒤 공백을 제거합니다."""
+
+        cleaned_value = value.strip()
+
+        if not cleaned_value:
+            raise ValueError(
+                "공백만 입력할 수 없습니다."
+            )
+
+        return cleaned_value
+
+    @field_validator("birth_year")
+    @classmethod
+    def validate_birth_year(
+        cls,
+        value: int | None,
+    ) -> int | None:
+        """출생 연도가 미래 연도인지 검사합니다."""
+
+        if value is None:
+            return None
+
+        current_year = datetime.now(KST).year
+
+        if value > current_year:
+            raise ValueError(
+                "출생 연도는 현재 연도보다 클 수 없습니다."
+            )
+
+        return value
+
+
+class ElderProfileData(BaseModel):
+    """어르신 프로필 응답 데이터."""
+
+    id: int
+    name: str
+    honorific: str
+    display_name: str
+    birth_year: int | None
+    created_at: datetime
+    updated_at: datetime | None
+
+
+class ElderProfileResponse(BaseModel):
+    """어르신 프로필 조회·수정 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: ElderProfileData
     meta: None = None
     error: None = None

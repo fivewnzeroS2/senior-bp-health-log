@@ -1,6 +1,6 @@
-import json
-
 """어르신 혈압 헬스 로그 FastAPI 애플리케이션."""
+
+import json
 
 from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta
@@ -28,21 +28,24 @@ from backend.models import (
     utc_now,
 )
 from backend.schemas import (
+    BloodPressureRecordChangeItem,
     BloodPressureRecordCreate,
     BloodPressureRecordCreateResponse,
     BloodPressureRecordData,
     BloodPressureRecordDeleteData,
     BloodPressureRecordDeleteResponse,
     BloodPressureRecordDetailResponse,
+    BloodPressureRecordHistoryData,
+    BloodPressureRecordHistoryItem,
+    BloodPressureRecordHistoryResponse,
     BloodPressureRecordListData,
     BloodPressureRecordListMeta,
     BloodPressureRecordListResponse,
     BloodPressureRecordUpdate,
     BloodPressureRecordUpdateResponse,
-    BloodPressureRecordChangeItem,
-    BloodPressureRecordHistoryData,
-    BloodPressureRecordHistoryItem,
-    BloodPressureRecordHistoryResponse,
+    ElderProfileData,
+    ElderProfileResponse,
+    ElderProfileUpdate,
     KST,
     WeeklyReportAverage,
     WeeklyReportComparison,
@@ -199,6 +202,37 @@ def calculate_difference(
     )
 
 
+def get_change_direction(
+    change: float | int | None,
+) -> Literal["increase", "decrease", "same"] | None:
+    """변화량을 증가·감소·동일 상태로 변환합니다."""
+
+    if change is None:
+        return None
+
+    if change > 0:
+        return "increase"
+
+    if change < 0:
+        return "decrease"
+
+    return "same"
+
+
+def format_signed_change(
+    change: float | int | None,
+    unit: str,
+) -> str:
+    """변화량에 부호와 단위를 붙여 반환합니다."""
+
+    if change is None:
+        return "비교 불가"
+
+    sign = "+" if change > 0 else ""
+
+    return f"{sign}{change}{unit}"
+
+
 def record_to_weekly_report_point(
     record: BloodPressureRecord,
 ) -> WeeklyReportRecordPoint:
@@ -339,6 +373,24 @@ def record_to_response_data(
     )
 
 
+def profile_to_response_data(
+    profile: ElderProfile,
+) -> ElderProfileData:
+    """DB 프로필을 API 응답 형식으로 변환합니다."""
+
+    return ElderProfileData(
+        id=profile.id,
+        name=profile.name,
+        honorific=profile.honorific,
+        display_name=(
+            f"{profile.name} {profile.honorific}".strip()
+        ),
+        birth_year=profile.birth_year,
+        created_at=profile.created_at,
+        updated_at=profile.updated_at,
+    )
+
+
 app = FastAPI(
     title="어르신 혈압 헬스 로그 API",
     description="혈압 기록, 조회, 리포트 및 공유 API",
@@ -436,6 +488,137 @@ def shared_report_page(
     )
 
 
+@app.get(
+    "/api/v1/profile",
+    response_model=ElderProfileResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["어르신 정보"],
+)
+def get_elder_profile(
+    db: Session = Depends(get_db),
+) -> ElderProfileResponse | JSONResponse:
+    """현재 관리 중인 어르신 정보를 조회합니다."""
+
+    profile = db.get(
+        ElderProfile,
+        1,
+    )
+
+    if profile is None:
+        return profile_not_found_response()
+
+    return ElderProfileResponse(
+        message="어르신 정보를 조회했습니다.",
+        data=profile_to_response_data(profile),
+    )
+
+
+@app.put(
+    "/api/v1/profile",
+    response_model=ElderProfileResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["어르신 정보"],
+)
+def update_elder_profile(
+    payload: ElderProfileUpdate,
+    db: Session = Depends(get_db),
+) -> ElderProfileResponse | JSONResponse:
+    """현재 관리 중인 어르신 정보를 수정합니다."""
+
+    profile = db.get(
+        ElderProfile,
+        1,
+    )
+
+    # 기본 프로필이 없는 예외 상황에서는 새로 생성합니다.
+    if profile is None:
+        profile = ElderProfile(
+            id=1,
+            name=payload.name,
+            honorific=payload.honorific,
+            birth_year=payload.birth_year,
+        )
+
+        try:
+            db.add(profile)
+            db.commit()
+            db.refresh(profile)
+
+        except SQLAlchemyError:
+            db.rollback()
+
+            return JSONResponse(
+                status_code=(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR
+                ),
+                content={
+                    "success": False,
+                    "message": (
+                        "어르신 정보를 저장하지 못했습니다."
+                    ),
+                    "data": None,
+                    "meta": None,
+                    "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "details": [],
+                    },
+                },
+            )
+
+        return ElderProfileResponse(
+            message="어르신 정보가 등록되었습니다.",
+            data=profile_to_response_data(profile),
+        )
+
+    has_changes = any(
+        [
+            profile.name != payload.name,
+            profile.honorific != payload.honorific,
+            profile.birth_year != payload.birth_year,
+        ]
+    )
+
+    if not has_changes:
+        return ElderProfileResponse(
+            message=(
+                "변경된 내용이 없어 "
+                "기존 정보를 반환했습니다."
+            ),
+            data=profile_to_response_data(profile),
+        )
+
+    profile.name = payload.name
+    profile.honorific = payload.honorific
+    profile.birth_year = payload.birth_year
+    profile.updated_at = utc_now()
+
+    try:
+        db.commit()
+        db.refresh(profile)
+
+    except SQLAlchemyError:
+        db.rollback()
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "message": "어르신 정보를 수정하지 못했습니다.",
+                "data": None,
+                "meta": None,
+                "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "details": [],
+                },
+            },
+        )
+
+    return ElderProfileResponse(
+        message="어르신 정보가 수정되었습니다.",
+        data=profile_to_response_data(profile),
+    )
+
+
 @app.post(
     "/api/v1/records",
     response_model=BloodPressureRecordCreateResponse,
@@ -490,7 +673,7 @@ def create_blood_pressure_record(
     response_data = record_to_response_data(record)
     return BloodPressureRecordCreateResponse(
         success=True,
-        message="혈압 기록이 성공적으로 저장되었습니다.",
+        message="혈압 기록이 저장되었습니다.",
         data=response_data,
     )
 
@@ -566,13 +749,6 @@ def list_blood_pressure_records(
         )
 
     effective_days = days
-
-    if (
-        effective_days is None
-        and start_date is None
-        and end_date is None
-    ):
-        effective_days = 7
 
     if (
         effective_days is None
@@ -758,10 +934,6 @@ def update_blood_pressure_record(
         payload.measured_at
     )
 
-    current_measured_at = to_sqlite_datetime(
-        record.measured_at
-    )
-
     # 실제로 값이 변경되었는지 확인합니다.
     before_snapshot = record_snapshot(record)
 
@@ -936,8 +1108,6 @@ def delete_blood_pressure_record(
 
 
 
-
-
 def invalid_date_filter_response(
     message: str,
 ) -> JSONResponse:
@@ -990,6 +1160,23 @@ def record_not_found_response(
         },
     )
 
+
+def profile_not_found_response() -> JSONResponse:
+    """어르신 프로필이 없을 때 오류를 반환합니다."""
+
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "success": False,
+            "message": "어르신 정보를 찾을 수 없습니다.",
+            "data": None,
+            "meta": None,
+            "error": {
+                "code": "PROFILE_NOT_FOUND",
+                "details": [],
+            },
+        },
+    )
 
 
 @app.get(
@@ -1076,13 +1263,15 @@ def get_blood_pressure_record_history(
     tags=["리포트"],
 )
 def get_weekly_blood_pressure_report(
-    end_date: date | None = Query(
-        default=None,
-        description=(
-            "리포트 마지막 날짜. "
-            "입력하지 않으면 오늘을 사용합니다."
+    end_date: Annotated[
+        date | None,
+        Query(
+            description=(
+                "리포트 마지막 날짜. "
+                "입력하지 않으면 오늘을 사용합니다."
+            )
         ),
-    ),
+    ] = None,
     db: Session = Depends(get_db),
 ) -> WeeklyReportResponse:
     """최근 7일과 이전 7일의 혈압 기록을 비교합니다."""
@@ -1142,24 +1331,72 @@ def get_weekly_blood_pressure_report(
         )
 
     else:
+        systolic_change = calculate_difference(
+            current_summary.average.systolic,
+            previous_summary.average.systolic,
+    )
+
+        diastolic_change = calculate_difference(
+            current_summary.average.diastolic,
+            previous_summary.average.diastolic,
+        )
+
+        pulse_change = calculate_difference(
+            current_summary.average.pulse,
+            previous_summary.average.pulse,
+        )
+
+        measurement_count_change = (
+            current_summary.measurement_count
+            - previous_summary.measurement_count
+        )
+
         comparison = WeeklyReportComparison(
             available=True,
-            systolic_change=calculate_difference(
-                current_summary.average.systolic,
-                previous_summary.average.systolic,
+
+            systolic_change=systolic_change,
+            systolic_direction=get_change_direction(
+                systolic_change
             ),
-            diastolic_change=calculate_difference(
-                current_summary.average.diastolic,
-                previous_summary.average.diastolic,
+
+            diastolic_change=diastolic_change,
+            diastolic_direction=get_change_direction(
+                diastolic_change
             ),
-            pulse_change=calculate_difference(
-                current_summary.average.pulse,
-                previous_summary.average.pulse,
+
+            pulse_change=pulse_change,
+            pulse_direction=get_change_direction(
+                pulse_change
             ),
+
             measurement_count_change=(
-                current_summary.measurement_count
-                - previous_summary.measurement_count
+                measurement_count_change
             ),
+            measurement_count_direction=(
+                get_change_direction(
+                    measurement_count_change
+                )
+            ),
+
+            messages=[
+                (
+                    "지난 7일 대비 수축기 평균: "
+                    f"{format_signed_change(systolic_change, 'mmHg')}"
+                ),
+                (
+                    "지난 7일 대비 이완기 평균: "
+                    f"{format_signed_change(diastolic_change, 'mmHg')}"
+                ),
+                (
+                    "지난 7일 대비 맥박 평균: "
+                    f"{format_signed_change(pulse_change, 'bpm')}"
+                ),
+                (
+                    "지난 7일 대비 측정 횟수: "
+                    f"{format_signed_change(measurement_count_change, '회')}"
+                ),
+            ],
+
             reason=None,
         )
 
@@ -1195,3 +1432,5 @@ def get_weekly_blood_pressure_report(
             trend=trend,
         ),
     )
+
+
