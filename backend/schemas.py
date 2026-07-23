@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     field_validator,
     model_validator,
@@ -456,5 +457,125 @@ class ElderProfileResponse(BaseModel):
     success: Literal[True] = True
     message: str
     data: ElderProfileData
+    meta: None = None
+    error: None = None
+
+
+class ShareLinkCreate(BaseModel):
+    """공유 링크 생성 요청."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+
+    target_type: Literal[
+        "family",
+        "medical",
+    ] = Field(
+        description="공유 대상: 가족 또는 의료진",
+    )
+
+    range_days: Literal[
+        7,
+        30,
+    ] = Field(
+        default=7,
+        description="공유할 혈압 기록 기간",
+    )
+
+    include_memo: bool = Field(
+        default=False,
+        description="공유 화면에 메모 포함 여부",
+    )
+
+    include_birth_year: bool = Field(
+        default=False,
+        description="공유 화면에 출생 연도 포함 여부",
+    )
+
+    expires_in_days: Literal[
+        1,
+        7,
+        30,
+    ] = Field(
+        default=7,
+        description="공유 링크 유효기간",
+    )
+
+
+class ShareLinkData(BaseModel):
+    """공유 링크 응답 데이터."""
+
+    id: int
+    token: str
+    share_url: str
+
+    target_type: Literal[
+        "family",
+        "medical",
+    ]
+    target_type_label: str
+
+    range_days: Literal[
+        7,
+        30,
+    ]
+
+    include_memo: bool
+    include_birth_year: bool
+
+    created_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None
+
+    status: Literal[
+        "active",
+        "expired",
+        "revoked",
+    ]
+    status_label: str
+
+
+class ShareLinkCreateResponse(BaseModel):
+    """공유 링크 생성 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: ShareLinkData
+    meta: None = None
+    error: None = None
+
+
+class ShareLinkListData(BaseModel):
+    """공유 링크 목록 데이터."""
+
+    items: list[ShareLinkData]
+
+
+class ShareLinkListMeta(BaseModel):
+    """공유 링크 상태별 개수."""
+
+    total: int = Field(ge=0)
+    active: int = Field(ge=0)
+    expired: int = Field(ge=0)
+    revoked: int = Field(ge=0)
+
+
+class ShareLinkListResponse(BaseModel):
+    """공유 링크 목록 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: ShareLinkListData
+    meta: ShareLinkListMeta
+    error: None = None
+
+
+class ShareLinkEndResponse(BaseModel):
+    """공유 링크 종료 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: ShareLinkData
     meta: None = None
     error: None = None

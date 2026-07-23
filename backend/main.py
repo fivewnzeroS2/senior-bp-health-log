@@ -1,9 +1,16 @@
 """어르신 혈압 헬스 로그 FastAPI 애플리케이션."""
 
 import json
+import secrets
 
 from contextlib import asynccontextmanager
-from datetime import date, datetime, time, timedelta
+from datetime import (
+    date,
+    datetime,
+    time,
+    timedelta,
+    timezone,
+)
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -25,6 +32,7 @@ from backend.models import (
     BloodPressureRecord,
     BloodPressureRecordHistory,
     ElderProfile,
+    ShareLink,
     utc_now,
 )
 from backend.schemas import (
@@ -47,6 +55,15 @@ from backend.schemas import (
     ElderProfileResponse,
     ElderProfileUpdate,
     KST,
+
+    ShareLinkCreate,
+    ShareLinkCreateResponse,
+    ShareLinkData,
+    ShareLinkEndResponse,
+    ShareLinkListData,
+    ShareLinkListMeta,
+    ShareLinkListResponse,
+
     WeeklyReportAverage,
     WeeklyReportCategoryCounts,
     WeeklyReportComparison,
@@ -487,6 +504,127 @@ def record_to_response_data(
         revision_count=record.revision_count,
         is_modified=record.revision_count > 0,
         is_deleted=record.deleted_at is not None,
+    )
+
+
+SHARE_TARGET_LABELS = {
+    "family": "가족",
+    "medical": "의료진",
+}
+
+
+SHARE_STATUS_LABELS = {
+    "active": "사용 가능",
+    "expired": "만료",
+    "revoked": "종료",
+}
+
+
+def normalize_utc_datetime(
+    value: datetime,
+) -> datetime:
+    """
+    SQLite에서 불러온 날짜를 UTC 기준으로 비교할 수 있게 합니다.
+
+    SQLite는 시간대 정보가 없는 datetime을 반환할 수 있으므로
+    시간대가 없으면 UTC로 간주합니다.
+    """
+
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(timezone.utc)
+
+
+def get_share_link_status(
+    share: ShareLink,
+) -> Literal[
+    "active",
+    "expired",
+    "revoked",
+]:
+    """공유 링크의 현재 상태를 반환합니다."""
+
+    if share.revoked_at is not None:
+        return "revoked"
+
+    expires_at = normalize_utc_datetime(
+        share.expires_at
+    )
+
+    now = normalize_utc_datetime(
+        utc_now()
+    )
+
+    if expires_at <= now:
+        return "expired"
+
+    return "active"
+
+
+def generate_unique_share_token(
+    db: Session,
+) -> str:
+    """DB에 없는 안전한 공유 토큰을 생성합니다."""
+
+    for _ in range(5):
+        token = secrets.token_urlsafe(32)
+
+        existing_id = db.scalar(
+            select(ShareLink.id).where(
+                ShareLink.token == token
+            )
+        )
+
+        if existing_id is None:
+            return token
+
+    raise RuntimeError(
+        "고유한 공유 토큰을 생성하지 못했습니다."
+    )
+
+
+def share_link_to_response_data(
+    share: ShareLink,
+    request: Request,
+) -> ShareLinkData:
+    """DB 공유 링크를 API 응답 형식으로 변환합니다."""
+
+    share_status = get_share_link_status(
+        share
+    )
+
+    share_url = str(
+        request.url_for(
+            "shared_report_page",
+            token=share.token,
+        )
+    )
+
+    return ShareLinkData(
+        id=share.id,
+        token=share.token,
+        share_url=share_url,
+        target_type=share.target_type,
+        target_type_label=(
+            SHARE_TARGET_LABELS[
+                share.target_type
+            ]
+        ),
+        range_days=share.range_days,
+        include_memo=share.include_memo,
+        include_birth_year=(
+            share.include_birth_year
+        ),
+        created_at=share.created_at,
+        expires_at=share.expires_at,
+        revoked_at=share.revoked_at,
+        status=share_status,
+        status_label=(
+            SHARE_STATUS_LABELS[
+                share_status
+            ]
+        ),
     )
 
 
@@ -1297,6 +1435,70 @@ def record_not_found_response(
     )
 
 
+def share_link_not_found_response(
+    share_id: int,
+) -> JSONResponse:
+    """공유 링크를 찾지 못했을 때 반환합니다."""
+
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "success": False,
+            "message": "공유 링크를 찾을 수 없습니다.",
+            "data": None,
+            "meta": None,
+            "error": {
+                "code": "SHARE_LINK_NOT_FOUND",
+                "details": [
+                    {
+                        "field": "share_id",
+                        "reason": (
+                            f"{share_id}번 공유 링크가 "
+                            "존재하지 않습니다."
+                        ),
+                    }
+                ],
+            },
+        },
+    )
+
+
+def inactive_share_link_response(
+    share_id: int,
+    share_status: str,
+) -> JSONResponse:
+    """이미 종료되거나 만료된 공유 링크 응답입니다."""
+
+    if share_status == "revoked":
+        message = "이미 종료된 공유 링크입니다."
+        error_code = "SHARE_LINK_ALREADY_REVOKED"
+    else:
+        message = "이미 만료된 공유 링크입니다."
+        error_code = "SHARE_LINK_EXPIRED"
+
+    return JSONResponse(
+        status_code=status.HTTP_410_GONE,
+        content={
+            "success": False,
+            "message": message,
+            "data": None,
+            "meta": None,
+            "error": {
+                "code": error_code,
+                "details": [
+                    {
+                        "field": "share_id",
+                        "reason": (
+                            f"{share_id}번 공유 링크는 "
+                            f"현재 {share_status} 상태입니다."
+                        ),
+                    }
+                ],
+            },
+        },
+    )
+
+
 def profile_not_found_response() -> JSONResponse:
     """어르신 프로필이 없을 때 오류를 반환합니다."""
 
@@ -1569,4 +1771,236 @@ def get_weekly_blood_pressure_report(
         ),
     )
 
+@app.post(
+    "/api/v1/shares",
+    response_model=ShareLinkCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["공유 링크"],
+)
+def create_share_link(
+    payload: ShareLinkCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ShareLinkCreateResponse | JSONResponse:
+    """읽기 전용 혈압 공유 링크를 생성합니다."""
+
+    try:
+        token = generate_unique_share_token(
+            db
+        )
+
+    except RuntimeError:
+        return JSONResponse(
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            content={
+                "success": False,
+                "message": (
+                    "공유 링크를 생성하지 못했습니다."
+                ),
+                "data": None,
+                "meta": None,
+                "error": {
+                    "code": "TOKEN_GENERATION_FAILED",
+                    "details": [],
+                },
+            },
+        )
+
+    created_at = utc_now()
+
+    expires_at = (
+        created_at
+        + timedelta(
+            days=payload.expires_in_days
+        )
+    )
+
+    share = ShareLink(
+        elder_id=1,
+        token=token,
+        target_type=payload.target_type,
+        range_days=payload.range_days,
+        include_memo=payload.include_memo,
+        include_birth_year=(
+            payload.include_birth_year
+        ),
+        created_at=created_at,
+        expires_at=expires_at,
+        revoked_at=None,
+    )
+
+    try:
+        db.add(share)
+        db.commit()
+        db.refresh(share)
+
+    except SQLAlchemyError:
+        db.rollback()
+
+        return JSONResponse(
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            content={
+                "success": False,
+                "message": (
+                    "공유 링크를 저장하지 못했습니다."
+                ),
+                "data": None,
+                "meta": None,
+                "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "details": [],
+                },
+            },
+        )
+
+    return ShareLinkCreateResponse(
+        message="공유 링크가 생성되었습니다.",
+        data=share_link_to_response_data(
+            share=share,
+            request=request,
+        ),
+    )
+
+
+
+@app.get(
+    "/api/v1/shares",
+    response_model=ShareLinkListResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["공유 링크"],
+)
+def list_share_links(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ShareLinkListResponse:
+    """생성된 공유 링크 목록을 최신순으로 조회합니다."""
+
+    statement = (
+        select(ShareLink)
+        .where(
+            ShareLink.elder_id == 1
+        )
+        .order_by(
+            ShareLink.created_at.desc(),
+            ShareLink.id.desc(),
+        )
+    )
+
+    shares = list(
+        db.scalars(statement).all()
+    )
+
+    items = [
+        share_link_to_response_data(
+            share=share,
+            request=request,
+        )
+        for share in shares
+    ]
+
+    status_counts = {
+        "active": 0,
+        "expired": 0,
+        "revoked": 0,
+    }
+
+    for item in items:
+        status_counts[item.status] += 1
+
+    if items:
+        message = "공유 링크 목록을 조회했습니다."
+    else:
+        message = "생성된 공유 링크가 없습니다."
+
+    return ShareLinkListResponse(
+        message=message,
+        data=ShareLinkListData(
+            items=items,
+        ),
+        meta=ShareLinkListMeta(
+            total=len(items),
+            active=status_counts["active"],
+            expired=status_counts["expired"],
+            revoked=status_counts["revoked"],
+        ),
+    )
+
+
+@app.delete(
+    "/api/v1/shares/{share_id}",
+    response_model=ShareLinkEndResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["공유 링크"],
+)
+def end_share_link(
+    share_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ShareLinkEndResponse | JSONResponse:
+    """활성 공유 링크를 종료합니다."""
+
+    share = db.get(
+        ShareLink,
+        share_id,
+    )
+
+    if (
+        share is None
+        or share.elder_id != 1
+    ):
+        return share_link_not_found_response(
+            share_id
+        )
+
+    current_status = get_share_link_status(
+        share
+    )
+
+    if current_status in (
+        "revoked",
+        "expired",
+    ):
+        return inactive_share_link_response(
+            share_id=share_id,
+            share_status=current_status,
+        )
+
+    share.revoked_at = utc_now()
+
+    try:
+        db.commit()
+        db.refresh(share)
+
+    except SQLAlchemyError:
+        db.rollback()
+
+        return JSONResponse(
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            content={
+                "success": False,
+                "message": (
+                    "공유 링크를 종료하지 못했습니다."
+                ),
+                "data": None,
+                "meta": None,
+                "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "details": [],
+                },
+            },
+        )
+
+    return ShareLinkEndResponse(
+        message="공유가 종료되었습니다.",
+        data=share_link_to_response_data(
+            share=share,
+            request=request,
+        ),
+    )
 
