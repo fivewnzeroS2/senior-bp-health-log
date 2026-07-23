@@ -17,6 +17,7 @@ from typing import Annotated, Literal
 from fastapi import (
     Depends,
     FastAPI,
+    Path as ApiPath,
     Query,
     Request,
     Response,
@@ -1933,9 +1934,21 @@ def get_blood_pressure_record_history(
     response_model=SharedReportResponse,
     status_code=status.HTTP_200_OK,
     tags=["공유 리포트"],
+    summary="공유 혈압 리포트 조회",
+    operation_id="get_shared_blood_pressure_report",
 )
 def get_shared_report(
-    token: str,
+    token: Annotated[
+        str,
+        ApiPath(
+            description=(
+                "공유 링크 생성 또는 목록 조회 응답에 포함된 "
+                "token 값을 입력합니다."
+            ),
+            min_length=20,
+            max_length=200,
+        ),
+    ],
     response: Response,
     db: Session = Depends(get_db),
 ) -> SharedReportResponse | JSONResponse:
