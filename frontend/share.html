@@ -1,116 +1,232 @@
-<!DOCTYPE html>
+<link
+    rel="stylesheet"
+    href="/static/css/share.css"
+>
+
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
+    <meta charset="utf-8">
 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
 
-  <title>공유 혈압 리포트</title>
+    <meta
+        name="robots"
+        content="noindex, nofollow, noarchive"
+    >
 
-  <link rel="stylesheet" href="/css/common.css">
-  <link rel="stylesheet" href="/css/share.css">
+    <title>혈압 공유 리포트</title>
+
+    <link
+        rel="stylesheet"
+        href="/static/css/share.css"
+    >
 </head>
 
 <body>
-  <header>
-    <!-- 이름과 호칭을 API에서 받아 표시 -->
-    <h1 data-view="shared-profile-name">
-      어르신 혈압 리포트
-    </h1>
+    <main class="share-page">
 
-    <p data-view="shared-report-type">
-      읽기 전용 공유 화면
-    </p>
-  </header>
+        <!-- API 응답을 기다리는 동안 표시 -->
+        <section
+            class="share-state"
+            data-view="loading"
+        >
+            <h1>혈압 리포트를 불러오고 있습니다.</h1>
+            <p>잠시만 기다려 주세요.</p>
+        </section>
 
-  <main>
-    <!-- 공유 범위 정보 -->
-    <section aria-labelledby="share-info-title">
-      <h2 id="share-info-title">공유 정보</h2>
 
-      <div data-view="share-info">
-        <p>조회 기간과 만료일을 불러오는 영역입니다.</p>
-      </div>
-    </section>
+        <!-- API 요청이 실패했을 때 표시 -->
+        <section
+            class="share-state"
+            data-view="error"
+            hidden
+        >
+            <h1 data-field="error-title">
+                리포트를 불러오지 못했습니다.
+            </h1>
 
-    <!-- 최근 측정 결과 -->
-    <section aria-labelledby="shared-latest-title">
-      <h2 id="shared-latest-title">최근 측정 혈압</h2>
+            <p data-field="error-message">
+                공유 링크를 다시 확인해 주세요.
+            </p>
+        </section>
 
-      <div data-view="shared-latest-record">
-        <p>최근 혈압 기록을 불러오는 영역입니다.</p>
-      </div>
-    </section>
 
-    <!-- 기간 요약 -->
-    <section aria-labelledby="shared-summary-title">
-      <h2 id="shared-summary-title">기간 요약</h2>
+        <!-- API 요청이 성공했을 때 표시 -->
+        <section
+            data-view="report"
+            hidden
+        >
+            <header class="report-header">
+                <p class="report-label">
+                    읽기 전용 혈압 리포트
+                </p>
 
-      <div data-view="shared-summary">
-        <p>평균·최고·최저 혈압을 불러오는 영역입니다.</p>
-      </div>
-    </section>
+                <h1 data-field="display-name">
+                    어르신 혈압 리포트
+                </h1>
 
-    <!-- 이전 기간 비교 -->
-    <section aria-labelledby="shared-comparison-title">
-      <h2 id="shared-comparison-title">이전 기간과 비교</h2>
+                <p data-field="birth-year">
+                    출생 연도 비공개
+                </p>
 
-      <div data-view="shared-comparison">
-        <p>이전 기간과의 변화량을 불러오는 영역입니다.</p>
-      </div>
-    </section>
+                <dl class="report-settings">
+                    <div>
+                        <dt>공유 대상</dt>
+                        <dd data-field="target-type">-</dd>
+                    </div>
 
-    <!-- 혈압 변화 -->
-    <section aria-labelledby="shared-trend-title">
-      <h2 id="shared-trend-title">혈압 변화</h2>
+                    <div>
+                        <dt>조회 기간</dt>
+                        <dd data-field="period">-</dd>
+                    </div>
 
-      <div data-view="shared-trend">
-        <p>날짜별 혈압 변화가 표시될 영역입니다.</p>
-      </div>
-    </section>
+                    <div>
+                        <dt>링크 만료</dt>
+                        <dd data-field="expires-at">-</dd>
+                    </div>
+                </dl>
+            </header>
 
-    <!-- 날짜별 기록 -->
-    <section aria-labelledby="shared-record-list-title">
-      <h2 id="shared-record-list-title">날짜별 혈압 기록</h2>
 
-      <div data-view="shared-record-list">
-        <p>공유된 혈압 기록을 불러오는 영역입니다.</p>
-      </div>
-    </section>
+            <section class="summary-section">
+                <h2>기간 요약</h2>
 
-    <!-- 공유 오류·만료 안내 -->
-    <section
-      data-view="share-error"
-      hidden
-      aria-labelledby="share-error-title"
-    >
-      <h2 id="share-error-title">공유 링크 안내</h2>
+                <div class="summary-grid">
+                    <article class="summary-card">
+                        <h3>전체 측정</h3>
+                        <strong data-field="measurement-count">
+                            0회
+                        </strong>
+                    </article>
 
-      <p data-view="share-error-message"></p>
-    </section>
+                    <article class="summary-card">
+                        <h3>평균 수축기</h3>
+                        <strong data-field="average-systolic">
+                            -
+                        </strong>
+                    </article>
 
-    <!-- 인쇄 -->
-    <section>
-      <button
-        type="button"
-        data-action="print-report"
-      >
-        혈압 리포트 인쇄
-      </button>
-    </section>
-  </main>
+                    <article class="summary-card">
+                        <h3>평균 이완기</h3>
+                        <strong data-field="average-diastolic">
+                            -
+                        </strong>
+                    </article>
 
-  <footer>
-    <p>
-      이 리포트는 사용자가 직접 입력한 건강 기록을 정리한 참고 자료입니다.
-      의료 진단이나 의료기관의 검사 결과를 대신하지 않습니다.
-    </p>
-  </footer>
+                    <article class="summary-card">
+                        <h3>평균 맥박</h3>
+                        <strong data-field="average-pulse">
+                            -
+                        </strong>
+                    </article>
+                </div>
+            </section>
 
-  <!-- 공유 화면 JavaScript -->
-  <script
-    type="module"
-    src="/js/share.js"
-  ></script>
+
+            <section class="category-section">
+                <h2>혈압 상태</h2>
+
+                <div class="category-grid">
+                    <article class="category-card">
+                        <span>정상</span>
+                        <strong data-field="normal-count">0회</strong>
+                    </article>
+
+                    <article class="category-card">
+                        <span>주의</span>
+                        <strong data-field="caution-count">0회</strong>
+                    </article>
+
+                    <article class="category-card">
+                        <span>높음</span>
+                        <strong data-field="high-count">0회</strong>
+                    </article>
+                </div>
+            </section>
+
+
+            <section class="range-section">
+                <h2>최고·최저 기록</h2>
+
+                <div class="range-grid">
+                    <article class="range-card">
+                        <h3>가장 높은 기록</h3>
+                        <p data-field="highest-record">
+                            기록 없음
+                        </p>
+                    </article>
+
+                    <article class="range-card">
+                        <h3>가장 낮은 기록</h3>
+                        <p data-field="lowest-record">
+                            기록 없음
+                        </p>
+                    </article>
+                </div>
+            </section>
+
+
+            <section class="records-section">
+                <div class="section-heading">
+                    <h2>혈압 기록</h2>
+
+                    <p data-field="record-count-text">
+                        총 0건
+                    </p>
+                </div>
+
+                <div
+                    class="empty-records"
+                    data-view="empty-records"
+                    hidden
+                >
+                    공유 기간에 등록된 혈압 기록이 없습니다.
+                </div>
+
+                <div
+                    class="table-wrapper"
+                    data-view="records-table"
+                    hidden
+                >
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>측정 일시</th>
+                                <th>시간대</th>
+                                <th>수축기</th>
+                                <th>이완기</th>
+                                <th>맥박</th>
+                                <th>상태</th>
+
+                                <th data-column="memo">
+                                    메모
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody data-field="records-body">
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+
+            <footer class="report-footer">
+                <p data-field="notice">
+                    혈압 상태는 참고 표시이며 의료 진단 결과가
+                    아닙니다.
+                </p>
+            </footer>
+        </section>
+    </main>
+
+    <script
+        src="/static/js/share.js"
+        defer
+    ></script>
 </body>
 </html>

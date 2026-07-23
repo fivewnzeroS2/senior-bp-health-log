@@ -905,6 +905,12 @@ app.mount(
     name="js",
 )
 
+app.mount(
+    "/static",
+    StaticFiles(directory=FRONTEND_DIR),
+    name="static",
+)
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(
