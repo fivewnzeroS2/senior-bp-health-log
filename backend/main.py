@@ -14,7 +14,14 @@ from datetime import (
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, Query, Request, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
     FileResponse,
@@ -67,6 +74,13 @@ from backend.schemas import (
     ShareLinkListData,
     ShareLinkListMeta,
     ShareLinkListResponse,
+    SharedReportData,
+    SharedReportPeriod,
+    SharedReportProfile,
+    SharedReportRecord,
+    SharedReportResponse,
+    SharedReportSettings,
+    SharedReportSummary,
 
     WeeklyReportAverage,
     WeeklyReportCategoryCounts,
@@ -767,6 +781,106 @@ def profile_to_response_data(
         birth_year=profile.birth_year,
         created_at=profile.created_at,
         updated_at=profile.updated_at,
+    )
+
+
+def record_to_shared_report_record(
+    record: BloodPressureRecord,
+    include_memo: bool,
+) -> SharedReportRecord:
+    """혈압 기록을 공유 화면용 형식으로 변환합니다."""
+
+    bp_category = get_blood_pressure_category(
+        systolic=record.systolic,
+        diastolic=record.diastolic,
+    )
+
+    return SharedReportRecord(
+        measured_at=record.measured_at,
+        systolic=record.systolic,
+        diastolic=record.diastolic,
+        pulse=record.pulse,
+        measurement_period=record.measurement_period,
+        measurement_period_label=(
+            get_measurement_period_label(
+                record.measurement_period
+            )
+        ),
+        bp_category=bp_category,
+        bp_category_label=(
+            get_blood_pressure_category_label(
+                bp_category
+            )
+        ),
+        memo=(
+            record.memo
+            if include_memo
+            else None
+        ),
+    )
+
+
+def build_shared_report_summary(
+    records: list[BloodPressureRecord],
+    include_memo: bool,
+) -> SharedReportSummary:
+    """공유 기간의 혈압 통계를 계산합니다."""
+
+    category_counts = count_blood_pressure_categories(
+        records
+    )
+
+    average = WeeklyReportAverage(
+        systolic=calculate_average(
+            [record.systolic for record in records]
+        ),
+        diastolic=calculate_average(
+            [record.diastolic for record in records]
+        ),
+        pulse=calculate_average(
+            [record.pulse for record in records]
+        ),
+    )
+
+    if not records:
+        return SharedReportSummary(
+            measurement_count=0,
+            category_counts=category_counts,
+            average=average,
+            highest=None,
+            lowest=None,
+        )
+
+    highest_record = max(
+        records,
+        key=lambda record: (
+            record.systolic,
+            record.diastolic,
+            record.measured_at,
+        ),
+    )
+
+    lowest_record = min(
+        records,
+        key=lambda record: (
+            record.systolic,
+            record.diastolic,
+            record.measured_at,
+        ),
+    )
+
+    return SharedReportSummary(
+        measurement_count=len(records),
+        category_counts=category_counts,
+        average=average,
+        highest=record_to_shared_report_record(
+            record=highest_record,
+            include_memo=include_memo,
+        ),
+        lowest=record_to_shared_report_record(
+            record=lowest_record,
+            include_memo=include_memo,
+        ),
     )
 
 
@@ -1703,6 +1817,40 @@ def profile_not_found_response() -> JSONResponse:
     )
 
 
+def shared_report_api_error_response(
+    status_code: int,
+    message: str,
+    error_code: str,
+) -> JSONResponse:
+    """공유 리포트 API의 접근 오류를 반환합니다."""
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": False,
+            "message": message,
+            "data": None,
+            "meta": None,
+            "error": {
+                "code": error_code,
+                "details": [],
+            },
+        },
+        headers={
+            "Cache-Control": (
+                "no-store, no-cache, "
+                "must-revalidate, max-age=0"
+            ),
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Robots-Tag": (
+                "noindex, nofollow, noarchive"
+            ),
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
+
 @app.get(
     "/api/v1/records/{record_id}/history",
     response_model=BloodPressureRecordHistoryResponse,
@@ -1776,6 +1924,178 @@ def get_blood_pressure_record_history(
             deleted_at=record.deleted_at,
             is_deleted=record.deleted_at is not None,
             items=items,
+        ),
+    )
+
+
+@app.get(
+    "/api/v1/shared/{token}",
+    response_model=SharedReportResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["공유 리포트"],
+)
+def get_shared_report(
+    token: str,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> SharedReportResponse | JSONResponse:
+    """유효한 공유 토큰에만 읽기 전용 혈압 리포트를 반환합니다."""
+
+    share = get_share_link_by_token(
+        db=db,
+        token=token,
+    )
+
+    if share is None:
+        return shared_report_api_error_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            message="유효하지 않은 공유 링크입니다.",
+            error_code="SHARE_LINK_NOT_FOUND",
+        )
+
+    share_status = get_share_link_status(
+        share
+    )
+
+    if share_status == "revoked":
+        return shared_report_api_error_response(
+            status_code=status.HTTP_410_GONE,
+            message="공유가 종료된 링크입니다.",
+            error_code="SHARE_LINK_REVOKED",
+        )
+
+    if share_status == "expired":
+        return shared_report_api_error_response(
+            status_code=status.HTTP_410_GONE,
+            message="공유 기간이 만료된 링크입니다.",
+            error_code="SHARE_LINK_EXPIRED",
+        )
+
+    profile = db.get(
+        ElderProfile,
+        share.elder_id,
+    )
+
+    if profile is None:
+        return shared_report_api_error_response(
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
+            message=(
+                "공유할 어르신 정보를 "
+                "준비하지 못했습니다."
+            ),
+            error_code=(
+                "SHARED_PROFILE_NOT_AVAILABLE"
+            ),
+        )
+
+    report_end_date = datetime.now(
+        KST
+    ).date()
+
+    report_start_date = (
+        report_end_date
+        - timedelta(
+            days=share.range_days - 1
+        )
+    )
+
+    records = get_active_records_between(
+        db=db,
+        start_date=report_start_date,
+        end_date=report_end_date,
+    )
+
+    shared_records = [
+        record_to_shared_report_record(
+            record=record,
+            include_memo=share.include_memo,
+        )
+        for record in records
+    ]
+
+    summary = build_shared_report_summary(
+        records=records,
+        include_memo=share.include_memo,
+    )
+
+    # 공유 데이터가 브라우저 캐시에
+    # 남지 않게 응답 헤더를 설정합니다.
+    response.headers[
+        "Cache-Control"
+    ] = (
+        "no-store, no-cache, "
+        "must-revalidate, max-age=0"
+    )
+
+    response.headers[
+        "Pragma"
+    ] = "no-cache"
+
+    response.headers[
+        "Expires"
+    ] = "0"
+
+    response.headers[
+        "X-Robots-Tag"
+    ] = "noindex, nofollow, noarchive"
+
+    response.headers[
+        "Referrer-Policy"
+    ] = "no-referrer"
+
+    if records:
+        message = (
+            "공유 혈압 리포트를 조회했습니다."
+        )
+    else:
+        message = (
+            "공유 기간에 혈압 기록이 없어 "
+            "빈 리포트를 반환했습니다."
+        )
+
+    return SharedReportResponse(
+        message=message,
+        data=SharedReportData(
+            settings=SharedReportSettings(
+                target_type=share.target_type,
+                target_type_label=(
+                    SHARE_TARGET_LABELS[
+                        share.target_type
+                    ]
+                ),
+                range_days=share.range_days,
+                include_memo=share.include_memo,
+                include_birth_year=(
+                    share.include_birth_year
+                ),
+                created_at=normalize_utc_datetime(
+                    share.created_at
+                ),
+                expires_at=normalize_utc_datetime(
+                    share.expires_at
+                ),
+            ),
+            profile=SharedReportProfile(
+                name=profile.name,
+                honorific=profile.honorific,
+                display_name=(
+                    f"{profile.name} "
+                    f"{profile.honorific}"
+                ).strip(),
+                birth_year=(
+                    profile.birth_year
+                    if share.include_birth_year
+                    else None
+                ),
+            ),
+            period=SharedReportPeriod(
+                start_date=report_start_date,
+                end_date=report_end_date,
+            ),
+            summary=summary,
+            records=shared_records,
         ),
     )
 

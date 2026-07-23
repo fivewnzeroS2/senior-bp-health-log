@@ -579,3 +579,98 @@ class ShareLinkEndResponse(BaseModel):
     data: ShareLinkData
     meta: None = None
     error: None = None
+
+class SharedReportProfile(BaseModel):
+    """공유 화면에 표시할 최소 어르신 정보."""
+
+    name: str
+    honorific: str
+    display_name: str
+    birth_year: int | None
+
+
+class SharedReportSettings(BaseModel):
+    """공유 링크에 설정된 공개 범위."""
+
+    target_type: Literal[
+        "family",
+        "medical",
+    ]
+
+    target_type_label: str
+
+    range_days: Literal[
+        7,
+        30,
+    ]
+
+    include_memo: bool
+    include_birth_year: bool
+
+    created_at: datetime
+    expires_at: datetime
+
+
+class SharedReportPeriod(BaseModel):
+    """공유되는 혈압 기록 기간."""
+
+    start_date: date
+    end_date: date
+
+
+class SharedReportRecord(BaseModel):
+    """공유 화면에 표시할 혈압 기록."""
+
+    measured_at: datetime
+    systolic: int
+    diastolic: int
+    pulse: int | None
+
+    measurement_period: str | None
+    measurement_period_label: str | None
+
+    bp_category: Literal[
+        "normal",
+        "caution",
+        "high",
+    ]
+
+    bp_category_label: str
+
+    memo: str | None
+
+
+class SharedReportSummary(BaseModel):
+    """공유 기간의 혈압 통계."""
+
+    measurement_count: int
+    category_counts: WeeklyReportCategoryCounts
+    average: WeeklyReportAverage
+
+    highest: SharedReportRecord | None
+    lowest: SharedReportRecord | None
+
+
+class SharedReportData(BaseModel):
+    """공유 리포트 전체 데이터."""
+
+    settings: SharedReportSettings
+    profile: SharedReportProfile
+    period: SharedReportPeriod
+    summary: SharedReportSummary
+    records: list[SharedReportRecord]
+
+    notice: str = (
+        "혈압 상태는 기록 확인을 위한 참고 표시이며 "
+        "의료 진단 결과가 아닙니다."
+    )
+
+
+class SharedReportResponse(BaseModel):
+    """공유 리포트 성공 응답."""
+
+    success: Literal[True] = True
+    message: str
+    data: SharedReportData
+    meta: None = None
+    error: None = None
