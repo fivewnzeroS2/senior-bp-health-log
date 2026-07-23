@@ -16,7 +16,11 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, Query, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -562,6 +566,126 @@ def get_share_link_status(
     return "active"
 
 
+def get_share_link_by_token(
+    db: Session,
+    token: str,
+) -> ShareLink | None:
+    """공유 토큰으로 공유 링크 한 건을 조회합니다."""
+
+    statement = (
+        select(ShareLink)
+        .where(
+            ShareLink.elder_id == 1,
+            ShareLink.token == token,
+        )
+        .limit(1)
+    )
+
+    return db.scalar(statement)
+
+
+def shared_access_error_response(
+    status_code: int,
+    title: str,
+    message: str,
+) -> HTMLResponse:
+    """공유 링크 접근 오류를 개인정보 없이 표시합니다."""
+
+    html_content = f"""
+    <!doctype html>
+    <html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1"
+        >
+        <title>{title}</title>
+        <style>
+            * {{
+                box-sizing: border-box;
+            }}
+
+            body {{
+                margin: 0;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+                background: #f5f6f8;
+                color: #202124;
+                font-family:
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    "Apple SD Gothic Neo",
+                    "Noto Sans KR",
+                    sans-serif;
+            }}
+
+            main {{
+                width: 100%;
+                max-width: 520px;
+                padding: 40px 32px;
+                border: 1px solid #e2e5e9;
+                border-radius: 18px;
+                background: #ffffff;
+                text-align: center;
+            }}
+
+            h1 {{
+                margin: 0 0 16px;
+                font-size: 26px;
+            }}
+
+            p {{
+                margin: 0;
+                color: #5f6368;
+                font-size: 17px;
+                line-height: 1.7;
+            }}
+
+            .status-code {{
+                display: inline-block;
+                margin-bottom: 16px;
+                padding: 6px 12px;
+                border-radius: 999px;
+                background: #f1f3f4;
+                color: #5f6368;
+                font-weight: 700;
+            }}
+        </style>
+    </head>
+    <body>
+        <main>
+            <div class="status-code">
+                {status_code}
+            </div>
+            <h1>{title}</h1>
+            <p>{message}</p>
+        </main>
+    </body>
+    </html>
+    """
+
+    return HTMLResponse(
+        status_code=status_code,
+        content=html_content,
+        headers={
+            "Cache-Control": (
+                "no-store, no-cache, "
+                "must-revalidate, max-age=0"
+            ),
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Robots-Tag": (
+                "noindex, nofollow, noarchive"
+            ),
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
+
 def generate_unique_share_token(
     db: Session,
 ) -> str:
@@ -730,17 +854,79 @@ def management_page() -> FileResponse:
 @app.get(
     "/share/{token}",
     include_in_schema=False,
+    name="shared_report_page",
+    response_model=None,
 )
 def shared_report_page(
     token: str,
-) -> FileResponse:
-    """공유 리포트 화면 HTML을 반환합니다."""
+    db: Session = Depends(get_db),
+) -> FileResponse | HTMLResponse:
+    """유효한 공유 링크에만 공유 화면을 반환합니다."""
 
-    del token
+    share = get_share_link_by_token(
+        db=db,
+        token=token,
+    )
 
-    return FileResponse(
+    if share is None:
+        return shared_access_error_response(
+            status_code=status.HTTP_404_NOT_FOUND,
+            title="유효하지 않은 공유 링크입니다.",
+            message=(
+                "공유 주소가 정확한지 확인해 주세요."
+            ),
+        )
+
+    share_status = get_share_link_status(
+        share
+    )
+
+    if share_status == "revoked":
+        return shared_access_error_response(
+            status_code=status.HTTP_410_GONE,
+            title="공유가 종료되었습니다.",
+            message=(
+                "이 링크는 공유자가 직접 종료하여 "
+                "더 이상 열 수 없습니다."
+            ),
+        )
+
+    if share_status == "expired":
+        return shared_access_error_response(
+            status_code=status.HTTP_410_GONE,
+            title="공유 기간이 만료되었습니다.",
+            message=(
+                "설정된 공유 유효기간이 지나 "
+                "더 이상 열 수 없습니다."
+            ),
+        )
+
+    response = FileResponse(
         FRONTEND_DIR / "share.html"
     )
+
+    # 공유 화면과 개인정보가 브라우저 캐시에
+    # 남지 않도록 응답 헤더를 설정합니다.
+    response.headers[
+        "Cache-Control"
+    ] = (
+        "no-store, no-cache, "
+        "must-revalidate, max-age=0"
+    )
+
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    response.headers[
+        "X-Robots-Tag"
+    ] = "noindex, nofollow, noarchive"
+
+    response.headers[
+        "Referrer-Policy"
+    ] = "no-referrer"
+
+    return response
+
 
 
 @app.get(
