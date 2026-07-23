@@ -117,6 +117,15 @@ class BloodPressureRecordData(BaseModel):
     pulse: int | None
     measurement_period: str | None
     measurement_period_label: str | None
+
+    bp_category: Literal[
+        "normal",
+        "caution",
+        "high",
+    ]
+
+    bp_category_label: str
+
     memo: str | None
     created_at: datetime
     updated_at: datetime | None
@@ -272,6 +281,14 @@ class WeeklyReportRecordPoint(BaseModel):
     systolic: int
     diastolic: int
     pulse: int | None
+
+    bp_category: Literal[
+        "normal",
+        "caution",
+        "high",
+    ]
+
+    bp_category_label: str
 
 
 class WeeklyReportSummary(BaseModel):

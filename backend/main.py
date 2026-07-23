@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -55,7 +55,11 @@ from backend.schemas import (
     WeeklyReportResponse,
     WeeklyReportSummary,
 )
-from backend.services import get_measurement_period_label
+from backend.services import (
+    get_blood_pressure_category,
+    get_blood_pressure_category_label,
+    get_measurement_period_label,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -238,12 +242,61 @@ def record_to_weekly_report_point(
 ) -> WeeklyReportRecordPoint:
     """DB 혈압 기록을 리포트용 데이터로 변환합니다."""
 
+    bp_category = get_blood_pressure_category(
+        systolic=record.systolic,
+        diastolic=record.diastolic,
+    )
+
     return WeeklyReportRecordPoint(
         record_id=record.id,
         measured_at=record.measured_at,
         systolic=record.systolic,
         diastolic=record.diastolic,
         pulse=record.pulse,
+        bp_category=bp_category,
+        bp_category_label=(
+            get_blood_pressure_category_label(
+                bp_category
+            )
+        ),
+    )
+
+
+def get_category_filter_condition(
+    category: Literal[
+        "normal",
+        "caution",
+        "high",
+    ],
+):
+    """
+    혈압 상태 검색에 사용할 SQL 조건을 반환합니다.
+
+    상태 계산 함수와 동일한 프로젝트 기준을 사용합니다.
+    """
+
+    high_condition = or_(
+        BloodPressureRecord.systolic >= 140,
+        BloodPressureRecord.diastolic >= 90,
+    )
+
+    normal_condition = and_(
+        BloodPressureRecord.systolic >= 90,
+        BloodPressureRecord.systolic < 120,
+        BloodPressureRecord.diastolic >= 60,
+        BloodPressureRecord.diastolic < 80,
+    )
+
+    if category == "high":
+        return high_condition
+
+    if category == "normal":
+        return normal_condition
+
+    # 주의는 높음과 정상 어디에도 속하지 않는 기록입니다.
+    return and_(
+        ~high_condition,
+        ~normal_condition,
     )
 
 
@@ -351,6 +404,11 @@ def record_to_response_data(
     DB의 혈압 기록을 API 응답 형식으로 변환합니다.
     """
 
+    bp_category = get_blood_pressure_category(
+        systolic=record.systolic,
+        diastolic=record.diastolic,
+    )
+
     return BloodPressureRecordData(
         id=record.id,
         measured_at=record.measured_at,
@@ -361,6 +419,12 @@ def record_to_response_data(
         measurement_period_label=(
             get_measurement_period_label(
                 record.measurement_period
+            )
+        ),
+        bp_category=bp_category,
+        bp_category_label=(
+            get_blood_pressure_category_label(
+                bp_category
             )
         ),
         memo=record.memo,
@@ -689,10 +753,25 @@ def list_blood_pressure_records(
         int | None,
         Query(description="최근 7일 또는 30일 조회"),
     ] = None,
+
+    category: Annotated[
+        Literal[
+            "normal",
+            "caution",
+            "high",
+        ] | None,
+        Query(
+            description=(
+                "혈압 상태: normal, caution, high"
+            )
+        ),
+    ] = None,
+
     start_date: Annotated[
         date | None,
         Query(description="직접 지정하는 조회 시작일"),
     ] = None,
+
     end_date: Annotated[
         date | None,
         Query(description="직접 지정하는 조회 종료일"),
@@ -761,7 +840,10 @@ def list_blood_pressure_records(
         BloodPressureRecord.elder_id == 1,
         BloodPressureRecord.deleted_at.is_(None),
     ]
-
+    if category is not None:
+        conditions.append(
+         get_category_filter_condition(category)
+        )
     filter_start_date: date | None = None
     filter_end_date: date | None = None
 
@@ -853,6 +935,7 @@ def list_blood_pressure_records(
             offset=offset,
             filters={
                 "days": effective_days,
+                "category": category,
                 "start_date": (
                     filter_start_date.isoformat()
                     if filter_start_date is not None
