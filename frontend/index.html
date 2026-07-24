@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="어르신 혈압 기록, 리포트 및 공유 관리 화면">
+  <title>어르신 혈압 헬스 로그</title>
+  <link rel="stylesheet" href="/static/css/index.css">
+</head>
+<body>
+  <!-- 통일된 선형 SVG 아이콘 세트 -->
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="icon-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/><path d="M7.5 12h2l1.2-2.5 2 5 1.2-2.5h2.6"/></symbol>
+    <symbol id="icon-edit" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></symbol>
+    <symbol id="icon-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/></symbol>
+    <symbol id="icon-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></symbol>
+    <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="icon-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1"/></symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/></symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></symbol>
+    <symbol id="icon-arrow-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></symbol>
+    <symbol id="icon-arrow-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
+  </svg>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#record-create" aria-label="어르신 혈압 헬스 로그 홈">
+        <span class="brand-mark"><svg><use href="#icon-heart"></use></svg></span>
+        <span>어르신 혈압<br>헬스 로그</span>
+      </a>
+
+      <nav class="nav-tabs" aria-label="관리 메뉴">
+        <button class="nav-tab is-active" type="button" data-action="open-tab" data-tab="record-create">
+          <svg><use href="#icon-edit"></use></svg><span>기록하기</span>
+        </button>
+        <button class="nav-tab" type="button" data-action="open-tab" data-tab="record-list">
+          <svg><use href="#icon-list"></use></svg><span>혈압 기록</span>
+        </button>
+        <button class="nav-tab" type="button" data-action="open-tab" data-tab="weekly-report">
+          <svg><use href="#icon-chart"></use></svg><span>주간 리포트</span>
+        </button>
+        <button class="nav-tab" type="button" data-action="open-tab" data-tab="share-management">
+          <svg><use href="#icon-share"></use></svg><span>공유 관리</span>
+        </button>
+        <button class="nav-tab" type="button" data-action="open-tab" data-tab="elder-profile">
+          <svg><use href="#icon-user"></use></svg><span>어르신 정보</span>
+        </button>
+      </nav>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">혈압 건강 관리</p>
+          <h1 data-field="page-title">기록하기</h1>
+        </div>
+        <div class="profile-summary">
+          <div class="profile-avatar" aria-hidden="true"><svg><use href="#icon-user"></use></svg></div>
+          <div>
+            <strong data-field="profile-display-name">김영희 어르신</strong>
+            <span data-field="profile-birth-year">출생 연도 불러오는 중</span>
+          </div>
+          <span class="last-measured" data-field="last-measured"><svg><use href="#icon-clock"></use></svg> 최근 측정 불러오는 중</span>
+        </div>
+      </header>
+
+      <!-- 기록하기: 기록 입력만 -->
+      <section class="tab-panel is-active" data-view="tab-panel" data-tab-panel="record-create">
+        <article class="panel-card form-card">
+          <div class="panel-heading">
+            <div>
+              <span class="section-icon"><svg><use href="#icon-edit"></use></svg></span>
+              <div><h2>오늘 혈압 기록하기</h2><p>측정값과 메모를 입력한 뒤 저장하세요.</p></div>
+            </div>
+          </div>
+
+          <form class="record-form" data-action="record-form">
+            <div class="form-row two-columns">
+              <label class="field"><span>측정 날짜</span><input type="date" data-field="measured-date"></label>
+              <label class="field"><span>측정 시간</span><input type="time" data-field="measured-time"></label>
+            </div>
+
+            <div class="measurement-grid">
+              <label class="measurement-field"><span>수축기 <small>mmHg</small></span><input type="number" min="50" max="260" data-field="systolic"></label>
+              <div class="measurement-divider">/</div>
+              <label class="measurement-field"><span>이완기 <small>mmHg</small></span><input type="number" min="30" max="180" data-field="diastolic"></label>
+              <label class="measurement-field"><span>맥박 <small>회/분</small></span><input type="number" min="20" max="250" data-field="pulse"></label>
+            </div>
+
+            <div class="form-row two-columns">
+              <label class="field"><span>시간대</span><select data-field="measurement-period"><option value="morning">아침</option><option value="afternoon">점심</option><option value="evening">저녁</option><option value="before_sleep">취침 전</option><option value="other">기타</option></select></label>
+              <label class="field"><span>메모</span><textarea rows="4" data-field="memo" placeholder="예: 아침 식사 전 측정"></textarea></label>
+            </div>
+
+            <button class="primary-button" type="submit"><svg><use href="#icon-edit"></use></svg>기록 저장</button>
+          </form>
+        </article>
+      </section>
+
+      <!-- 혈압 기록 -->
+      <section class="tab-panel" data-view="tab-panel" data-tab-panel="record-list">
+        <div class="summary-cards three-columns">
+          <article class="summary-card latest-card" data-view="latest-record"><p>최근 측정</p><div class="bp-value"><strong data-field="latest-systolic">-</strong><span>/</span><strong data-field="latest-diastolic">-</strong><small>mmHg</small></div><div class="summary-meta" data-field="latest-meta">기록을 불러오는 중입니다.</div><span class="status-badge muted" data-field="latest-status">-</span></article>
+          <article class="summary-card" data-view="highest-record"><p>가장 높은 기록</p><div class="bp-value danger"><strong data-field="highest-systolic">-</strong><span>/</span><strong data-field="highest-diastolic">-</strong><small>mmHg</small></div><div class="summary-meta" data-field="highest-meta">기록을 불러오는 중입니다.</div><span class="status-badge muted" data-field="highest-status">-</span></article>
+          <article class="summary-card" data-view="lowest-record"><p>가장 낮은 기록</p><div class="bp-value safe"><strong data-field="lowest-systolic">-</strong><span>/</span><strong data-field="lowest-diastolic">-</strong><small>mmHg</small></div><div class="summary-meta" data-field="lowest-meta">기록을 불러오는 중입니다.</div><span class="status-badge muted" data-field="lowest-status">-</span></article>
+        </div>
+
+        <article class="panel-card">
+          <div class="panel-heading records-heading">
+            <div><span class="section-icon"><svg><use href="#icon-list"></use></svg></span><div><h2>혈압 기록 목록</h2><p>기간과 상태를 선택하면 목록이 바로 바뀝니다.</p></div></div>
+          </div>
+
+          <div class="filter-toolbar" aria-label="혈압 기록 필터">
+            <div class="filter-group" data-filter-group="range">
+              <button class="filter-chip is-selected" type="button" data-action="select-filter" data-filter-type="range" data-filter-value="7">최근 7일</button>
+              <button class="filter-chip" type="button" data-action="select-filter" data-filter-type="range" data-filter-value="30">최근 30일</button>
+              <button class="filter-chip" type="button" data-action="select-filter" data-filter-type="range" data-filter-value="all">전체</button>
+            </div>
+            <div class="filter-group" data-filter-group="status">
+              <button class="filter-chip is-selected" type="button" data-action="select-filter" data-filter-type="status" data-filter-value="all">전체 상태</button>
+              <button class="filter-chip normal" type="button" data-action="select-filter" data-filter-type="status" data-filter-value="normal">정상</button>
+              <button class="filter-chip caution" type="button" data-action="select-filter" data-filter-type="status" data-filter-value="caution">주의</button>
+              <button class="filter-chip high" type="button" data-action="select-filter" data-filter-type="status" data-filter-value="high">높음</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="records-table">
+              <thead><tr><th>측정 일시</th><th>시간대</th><th>혈압</th><th>맥박</th><th>상태</th><th>메모</th><th>관리</th></tr></thead>
+              <tbody data-field="record-table-body"></tbody>
+            </table>
+            <div class="empty-state" data-view="record-empty" hidden>선택한 조건에 해당하는 기록이 없습니다.</div>
+          </div>
+        </article>
+      </section>
+
+      <!-- 주간 리포트 -->
+      <section class="tab-panel" data-view="tab-panel" data-tab-panel="weekly-report">
+        <article class="panel-card">
+          <div class="panel-heading"><div><span class="section-icon"><svg><use href="#icon-chart"></use></svg></span><div><h2>최근 7일 요약</h2><p data-field="weekly-period">기간을 불러오는 중입니다.</p></div></div></div>
+          <div class="weekly-summary-grid">
+            <div class="metric-card"><span>측정</span><strong><em data-field="weekly-count">0</em><small>회</small></strong></div>
+            <div class="metric-card"><span>평균 혈압</span><strong><em data-field="weekly-average-systolic">-</em> / <em data-field="weekly-average-diastolic">-</em><small>mmHg</small></strong></div>
+            <div class="metric-card"><span>평균 맥박</span><strong><em data-field="weekly-average-pulse">-</em><small>회/분</small></strong></div>
+            <div class="metric-card normal"><span>정상</span><strong><em data-field="weekly-normal">0</em><small>회</small></strong></div>
+            <div class="metric-card caution"><span>주의</span><strong><em data-field="weekly-caution">0</em><small>회</small></strong></div>
+            <div class="metric-card high"><span>높음</span><strong><em data-field="weekly-high">0</em><small>회</small></strong></div>
+          </div>
+        </article>
+
+        <article class="panel-card chart-card">
+          <div class="panel-heading"><div><span class="section-icon"><svg><use href="#icon-chart"></use></svg></span><div><h2>혈압 변화</h2><p>탭을 열면 선과 점이 순서대로 나타납니다.</p></div></div><div class="chart-legend"><span class="blue-dot">수축기</span><span class="green-dot">이완기</span></div></div>
+          <div class="chart-area" data-view="weekly-chart">
+            <svg viewBox="0 0 860 360" role="img" aria-label="최근 7일 수축기와 이완기 혈압 변화 그래프" data-field="weekly-chart-svg"></svg>
+          </div>
+        </article>
+      </section>
+
+      <!-- 공유 관리 -->
+      <section class="tab-panel" data-view="tab-panel" data-tab-panel="share-management">
+        <div class="share-layout">
+          <article class="panel-card share-create-card">
+            <div class="panel-heading"><div><span class="section-icon"><svg><use href="#icon-share"></use></svg></span><div><h2>공유 링크 관리</h2><p>먼저 공유 대상을 선택하세요.</p></div></div></div>
+
+            <fieldset class="share-targets"><legend>공유 대상</legend>
+              <label class="choice-card is-selected"><input type="radio" name="share-target" value="family" checked><span><svg><use href="#icon-user"></use></svg><strong>가족</strong><small>가족이 확인하는 링크</small></span></label>
+              <label class="choice-card"><input type="radio" name="share-target" value="medical"><span><svg><use href="#icon-heart"></use></svg><strong>의료진</strong><small>의료 상담용 링크</small></span></label>
+            </fieldset>
+
+            <button class="more-toggle" type="button" data-action="toggle-share-options" aria-expanded="false"><span><svg><use href="#icon-more"></use></svg>더보기</span><svg class="chevron"><use href="#icon-chevron"></use></svg></button>
+
+            <div class="advanced-options" data-view="advanced-share-options" hidden>
+              <label class="field"><span>조회 기간</span><select data-field="share-range"><option value="7" selected>최근 7일</option><option value="30">최근 30일</option></select></label>
+              <div class="option-row"><label class="check-option"><input type="checkbox" data-field="include-memo"><span>메모 포함</span></label><label class="check-option"><input type="checkbox" data-field="include-birth-year"><span>출생 연도 포함</span></label></div>
+              <label class="field"><span>유효기간</span><select data-field="share-expiry"><option value="1">1일</option><option value="7" selected>7일</option><option value="30">30일</option></select></label>
+            </div>
+
+            <div class="share-default-summary" data-view="share-default-summary"><span>기본 설정</span><strong>최근 7일 · 메모 제외 · 출생 연도 제외 · 7일간 유효</strong></div>
+            <button class="primary-button" type="button" data-action="create-share"><svg><use href="#icon-link"></use></svg>공유 링크 만들기</button>
+          </article>
+
+          <article class="panel-card share-list-card">
+            <div class="panel-heading"><div><span class="section-icon"><svg><use href="#icon-list"></use></svg></span><div><h2>링크 목록</h2><p>활성, 만료, 종료 링크를 모두 확인합니다.</p></div></div></div>
+            <div class="table-wrap">
+              <table class="share-table"><thead><tr><th>생성일</th><th>대상</th><th>기간</th><th>유효기간</th><th>상태</th><th>관리</th></tr></thead><tbody data-field="share-table-body"></tbody></table><div class="empty-state" data-view="share-empty" hidden>생성된 공유 링크가 없습니다.</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- 어르신 정보 -->
+      <section class="tab-panel" data-view="tab-panel" data-tab-panel="elder-profile">
+        <article class="panel-card profile-card">
+          <div class="panel-heading"><div><span class="section-icon"><svg><use href="#icon-user"></use></svg></span><div><h2>어르신 정보</h2><p>관리 대상 한 분의 기본 정보만 표시합니다.</p></div></div><button class="secondary-button" type="button" data-action="edit-profile"><svg><use href="#icon-settings"></use></svg>정보 수정</button></div>
+          <div class="profile-detail-grid">
+            <div><span>이름</span><strong data-field="profile-name">-</strong></div><div><span>호칭</span><strong data-field="profile-honorific">-</strong></div><div><span>출생 연도</span><strong data-field="profile-detail-birth-year">-</strong></div><div><span>표시 이름</span><strong data-field="profile-detail-display-name">-</strong></div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" data-view="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/static/js/index.js" defer></script>
+</body>
+</html>

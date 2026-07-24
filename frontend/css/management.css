@@ -1,0 +1,22 @@
+/* 관리 화면 전용 임시 스타일 */
+
+[data-view="record-form"],
+[data-view="share-form"] {
+  display: grid;
+  gap: 16px;
+}
+
+[data-view="record-list"],
+[data-view="weekly-report"],
+[data-view="share-list"] {
+  margin-top: 16px;
+}
+
+[data-view="record-form-message"] {
+  min-height: 24px;
+}
+
+[data-action="save-record"],
+[data-action="create-share"] {
+  margin-top: 8px;
+}

@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+.venv-*
+venv
+__pycache__
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+.DS_Store
+.env
+.env.*
+*.log
+frontend/js/*.backup.js
+frontend/js/*.broken.*

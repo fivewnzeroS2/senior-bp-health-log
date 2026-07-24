@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <title>혈압 공유 리포트</title>
+  <link rel="stylesheet" href="/static/css/share.css" />
+</head>
+<body>
+  <main class="share-shell">
+    <section class="state-card" data-view="loading">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>혈압 리포트를 불러오고 있습니다.</h1>
+      <p>잠시만 기다려 주세요.</p>
+    </section>
+
+    <section class="state-card" data-view="error" hidden>
+      <div class="state-icon error-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 3.6 2.7 17a2 2 0 0 0 1.74 3h15.12A2 2 0 0 0 21.3 17L13.7 3.6a2 2 0 0 0-3.4 0Z"/></svg>
+      </div>
+      <h1 data-field="error-title">리포트를 불러오지 못했습니다.</h1>
+      <p data-field="error-message">공유 링크를 다시 확인해 주세요.</p>
+    </section>
+
+    <section class="report" data-view="report" hidden>
+      <header class="report-hero">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 12h3l2-5 4 10 2-5h7M12 21C7 18 3 15 3 10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5-4 8-9 11Z"/></svg>
+          </div>
+          <span>어르신 혈압 헬스 로그</span>
+          <span class="readonly-badge">
+            <svg viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3m-11 0h12v10H6z"/></svg>
+            읽기 전용 공유 리포트
+          </span>
+        </div>
+
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow">공유 혈압 리포트</p>
+            <h1 data-field="display-name">어르신 혈압 리포트</h1>
+            <p class="readonly-note">이 화면은 조회만 가능하며 기록을 수정하거나 삭제할 수 없습니다.</p>
+
+            <div class="profile-meta">
+              <span data-field="birth-year">출생 연도 비공개</span>
+              <span data-field="target-type">공유 대상 -</span>
+            </div>
+          </div>
+
+          <dl class="share-meta">
+            <div>
+              <dt>조회 기간</dt>
+              <dd data-field="period">-</dd>
+            </div>
+            <div>
+              <dt>링크 만료</dt>
+              <dd data-field="expires-at">-</dd>
+            </div>
+          </dl>
+        </div>
+      </header>
+
+      <section class="report-section">
+        <div class="section-heading">
+          <div>
+            <span class="section-number">1</span>
+            <h2>기간 요약</h2>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <article class="summary-card">
+            <div class="card-icon blue-icon"><svg viewBox="0 0 24 24"><path d="M7 3v3m10-3v3M4 9h16M5 5h14v16H5z"/></svg></div>
+            <span>전체 측정</span>
+            <strong data-field="measurement-count">0회</strong>
+          </article>
+          <article class="summary-card">
+            <div class="card-icon blue-icon"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg></div>
+            <span>평균 수축기</span>
+            <strong><b data-field="average-systolic">-</b> <small>mmHg</small></strong>
+          </article>
+          <article class="summary-card">
+            <div class="card-icon green-icon"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg></div>
+            <span>평균 이완기</span>
+            <strong><b data-field="average-diastolic">-</b> <small>mmHg</small></strong>
+          </article>
+          <article class="summary-card">
+            <div class="card-icon purple-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></div>
+            <span>평균 맥박</span>
+            <strong><b data-field="average-pulse">-</b> <small>회/분</small></strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="report-section">
+        <div class="section-heading">
+          <div><span class="section-number">2</span><h2>혈압 상태</h2></div>
+        </div>
+        <div class="status-grid">
+          <article class="status-card normal-card">
+            <span class="status-icon"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg></span>
+            <div><span>정상</span><strong data-field="normal-count">0회</strong></div>
+          </article>
+          <article class="status-card caution-card">
+            <span class="status-icon"><svg viewBox="0 0 24 24"><path d="M12 8v5m0 4h.01M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z"/></svg></span>
+            <div><span>주의</span><strong data-field="caution-count">0회</strong></div>
+          </article>
+          <article class="status-card high-card">
+            <span class="status-icon"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></span>
+            <div><span>높음</span><strong data-field="high-count">0회</strong></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="two-column">
+        <article class="report-section compact-section">
+          <div class="section-heading"><div><span class="section-number">3</span><h2>최고·최저 기록</h2></div></div>
+          <div class="extreme-list">
+            <div class="extreme-card highest-card">
+              <span>가장 높은 기록</span>
+              <strong data-field="highest-value">기록 없음</strong>
+              <small data-field="highest-meta">-</small>
+            </div>
+            <div class="extreme-card lowest-card">
+              <span>가장 낮은 기록</span>
+              <strong data-field="lowest-value">기록 없음</strong>
+              <small data-field="lowest-meta">-</small>
+            </div>
+          </div>
+        </article>
+
+        <article class="report-section compact-section">
+          <div class="section-heading"><div><span class="section-number">4</span><h2>혈압 변화</h2></div></div>
+          <div class="chart-wrap">
+            <div class="chart-legend"><span class="sys-dot">수축기</span><span class="dia-dot">이완기</span></div>
+            <svg id="bp-chart" viewBox="0 0 720 310" role="img" aria-label="혈압 변화 그래프">
+              <g class="chart-grid"></g>
+              <g class="chart-axis-labels"></g>
+              <polyline class="chart-line systolic-line" points="" />
+              <polyline class="chart-line diastolic-line" points="" />
+              <g class="systolic-points"></g>
+              <g class="diastolic-points"></g>
+              <g class="chart-dates"></g>
+            </svg>
+          </div>
+        </article>
+      </section>
+
+      <section class="report-section">
+        <div class="section-heading records-heading">
+          <div><span class="section-number">5</span><h2>혈압 기록</h2></div>
+          <span data-field="record-count-text">총 0건</span>
+        </div>
+
+        <div class="empty-state" data-view="empty-records" hidden>공유 기간에 등록된 혈압 기록이 없습니다.</div>
+
+        <div class="table-scroll" data-view="records-table" hidden>
+          <table>
+            <thead>
+              <tr>
+                <th>측정 일시</th><th>시간대</th><th>수축기</th><th>이완기</th><th>맥박</th><th>상태</th><th data-column="memo">메모</th>
+              </tr>
+            </thead>
+            <tbody data-field="records-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="notice-card">
+        <svg viewBox="0 0 24 24"><path d="M12 8h.01M11 12h1v4h1M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z"/></svg>
+        <div>
+          <p data-field="notice">혈압 상태는 기록 확인을 위한 참고 표시이며 의료 진단 결과가 아닙니다.</p>
+          <p>공유 링크의 유효기간이 지나거나 공유가 종료되면 더 이상 열 수 없습니다.</p>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <script src="/static/js/share.js" defer></script>
+</body>
+</html>
